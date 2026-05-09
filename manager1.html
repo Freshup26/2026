@@ -339,9 +339,9 @@ td{padding:8px 11px;vertical-align:middle;}
     <!-- EXPIRY -->
     <div class="view" id="view-expiry">
       <div class="ptabs">
-        <button class="ptab active" onclick="eTab('week',this)">📅 هذا الأسبوع</button>
+        <button class="ptab" onclick="eTab('week',this)">📅 هذا الأسبوع</button>
         <button class="ptab" onclick="eTab('month',this)">📆 الشهر</button>
-        <button class="ptab" onclick="eTab('all',this)">📋 الكل</button>
+        <button class="ptab active" onclick="eTab('all',this)">📋 الكل</button>
       </div>
       <div class="krow">
         <div class="kc kc-rd"><div class="kl">منتجات منتهية</div><div class="kv" id="et" style="font-size:1.05rem;">—</div><div style="font-size:.85rem;font-weight:700;color:var(--or);" id="et-qty">—</div><div class="ks" id="et-s">—</div></div>
@@ -578,7 +578,7 @@ const EN={"801":"شعيب","802":"محمد","301":"بسام","201":"وجدان",
 const CAT_MAP={"sandwich":"ساندويش","juices":"عصائر","salads":"سلطات"};
 const normCat=c=>CAT_MAP[c]||c;
 
-let curReg="all",wkOff=0,gWkOff=0,expTab="week",gRegion="riyadh",hFil="all",rankPeriod="week";
+let curReg="all",wkOff=0,gWkOff=0,expTab="all",gRegion="riyadh",hFil="all",rankPeriod="week";
 
 // ═══ UTILS ══════════════════════════════════════════════════════════════════
 const td=()=>new Date().toISOString().split("T")[0];
@@ -674,7 +674,7 @@ function renderDash(){
   const pct=gTot>0?Math.round((total/gTot)*100):0;
   const expItems=getExp(wk);const expired=expItems.filter(e=>(es(e.exp).d||0)<0);
   const wasteCost=expired.reduce((s,e)=>s+(cost(e.nameAr)*(parseInt(e.qty)||0)),0);
-  const bals=JSON.parse(localStorage.getItem(K.bal)||"[]").filter(b=>inWk(b.addedDate,wk));
+  const bals=JSON.parse(localStorage.getItem(K.bal)||"[]");
   const totalCash=bals.reduce((s,b)=>s+(parseFloat(b.cash)||0),0);
   S("d-sales",total.toLocaleString("ar-SA")+" ريال");
   S("d-goal-pct",pct+"%");S("d-goal-sub","من "+gTot.toLocaleString("ar-SA")+" ريال");
@@ -757,7 +757,6 @@ function renderExpAlerts(){
 
 // ═══ SALES ════════════════════════════════════════════════════════════════════
 function renderSales(){
-  const wk=ws();
   const bals=JSON.parse(localStorage.getItem(K.bal)||"[]").filter(b=>getBrs(curReg).includes(b.site)&&inWk(b.addedDate,wk)).sort((a,b)=>a.addedDate>b.addedDate?1:-1);
   const byBr={};let tot=0;
   bals.forEach(b=>{if(!byBr[b.site])byBr[b.site]=0;byBr[b.site]+=(parseFloat(b.pos)||0);tot+=(parseFloat(b.pos)||0);});
@@ -834,133 +833,296 @@ function renderCompare(){
 }
 
 // ═══ EXPIRY ════════════════════════════════════════════════════════════════════
-function renderExp(){
-  const useWk=expTab==="week",useMo=expTab==="month";
-  const items=getExp(useWk?ws():null,useMo);
-  const expired=items.filter(e=>(es(e.exp).d||0)<0);
-  const expQty=expired.reduce((s,e)=>s+(parseInt(e.qty)||0),0);
-  const wasteCst=expired.reduce((s,e)=>s+(cost(e.nameAr)*(parseInt(e.qty)||0)),0);
-  const wkSales=Object.values(getWkS("all")).reduce((s,v)=>s+v,0);
-  const pct=wkSales>0?((expQty/wkSales)*100).toFixed(1):"—";
-  const affBrs=[...new Set(expired.map(e=>e.site))].length;
-  S("et",(expired.length||0)+" منتج");S("et-qty",(expQty||0)+" وحدة");
-  S("ec",wasteCst.toFixed(2)+" ريال");S("ep",pct);S("e-brs",affBrs);
-  S("et-s",useWk?"هذا الأسبوع":useMo?"هذا الشهر":"الكل");
-  updBadges();
-  const cats=[{k:"ساندويش",cls:"ccr-sw",ic:"🥪"},{k:"عصائر",cls:"ccr-jc",ic:"🥤"},{k:"سلطات",cls:"ccr-sl",ic:"🥗"}];
-  let totC=0;
-  document.getElementById("exp-cat").innerHTML=cats.map(cat=>{
-    const ci=expired.filter(e=>normCat(e.cat)===cat.k);
-    const q=ci.reduce((s,e)=>s+(parseInt(e.qty)||0),0);
-    const c=ci.reduce((s,e)=>s+(cost(e.nameAr)*(parseInt(e.qty)||0)),0);totC+=c;
-    if(!q)return"";
-    return '<div class="ccr '+cat.cls+'"><span style="font-size:.84rem;font-weight:800;">'+cat.ic+' '+cat.k+'</span>'
-      +'<div style="display:flex;gap:16px;align-items:center;">'
-      +'<span style="font-size:.78rem;color:#888;">'+q+' وحدة</span>'
-      +'<span style="font-family:var(--nm);font-weight:800;color:var(--rd);font-size:.95rem;">'+c.toFixed(2)+' ريال</span>'
-      +'</div></div>';
-  }).join("")
-  +'<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:rgba(192,57,43,.08);border-radius:9px;margin-top:6px;border:1px solid rgba(192,57,43,.2);">'
-  +'<span style="font-size:.85rem;font-weight:800;color:var(--rd);">💸 إجمالي تكلفة الهدر</span>'
-  +'<span style="font-family:var(--nm);font-size:1.1rem;font-weight:900;color:var(--rd);">'+totC.toFixed(2)+' ريال</span></div>';
-  buildProdTable("exp-tbl",items,"expiry");
-}
+// ═══ INVENTORY — عرض بالعمليات ════════════════════════════════════
+let selInvId=null; // العملية المحددة حالياً
 
-function buildProdTable(cid,items,mode){
-  const el=document.getElementById(cid);
-  if(!items||!items.length){el.innerHTML='<div class="empty-msg">لا توجد بيانات</div>';return;}
-  const brs=[...new Set(items.map(e=>e.site))].sort();
-  const dates=[...new Set(items.map(e=>mode==="expiry"?e.exp:e.addedDate))].filter(Boolean).sort();
-  const cats=[{k:"ساندويش",ps:PRODS.sandwich},{k:"عصائر",ps:PRODS.juices},{k:"سلطات",ps:PRODS.salads}];
-  const lk={};
-  items.forEach(e=>{
-    const key=mode==="expiry"?e.exp:e.addedDate;
-    if(!lk[e.nameAr])lk[e.nameAr]={};
-    const ck=e.site+"__"+key;
-    lk[e.nameAr][ck]=(lk[e.nameAr][ck]||0)+(parseInt(e.qty)||0);
-  });
-  const cols=[];brs.forEach(br=>dates.forEach(dt=>cols.push({br,dt,key:br+"__"+dt})));
-  let html='<table class="pdt"><thead><tr><th class="lft">المنتج</th>'
-    +cols.map(c=>'<th>'+c.br.replace("فرع ","").split(" - ")[0]+'<br/><span style="opacity:.7;font-size:.59rem;">'+fd(c.dt)+'</span></th>').join("")
-    +'<th>إجمالي</th></tr></thead><tbody>';
-  let grand=0;
-  cats.forEach(cat=>{
-    const cps=cat.ps.filter(p=>lk[p.ar]);if(!cps.length)return;
-    let catTot=0;const catCols=cols.map(()=>0);
-    html+='<tr class="cat-hdr"><td colspan="'+(cols.length+2)+'" class="lft">'+(cat.k==="ساندويش"?"🥪":cat.k==="عصائر"?"🥤":"🥗")+' '+cat.k+'</td></tr>';
-    cps.forEach(p=>{
-      const rTot=Object.values(lk[p.ar]||{}).reduce((s,v)=>s+v,0);catTot+=rTot;
-      html+='<tr><td class="lft" style="font-size:.79rem;">'+p.ar+'</td>'
-        +cols.map((c,ci)=>{const v=lk[p.ar]?.[c.key]||0;catCols[ci]+=v;return'<td class="'+(v>0?"cell-has":"cell-empty")+'">'+(v||"—")+'</td>';}).join("")
-        +'<td style="font-weight:800;font-family:var(--nm);color:var(--tl);">'+(rTot||"—")+'</td></tr>';
-    });
-    grand+=catTot;
-    html+='<tr class="cat-tot"><td class="lft">إجمالي '+cat.k+'</td>'
-      +catCols.map(v=>'<td style="font-weight:800;font-family:var(--nm);color:var(--tl);">'+(v||"—")+'</td>').join("")
-      +'<td style="font-weight:800;font-family:var(--nm);color:var(--tl);">'+catTot+'</td></tr>';
-  });
-  const colTots=cols.map(c=>Object.values(lk).reduce((s,cm)=>s+(cm[c.key]||0),0));
-  html+='<tr class="grd-tot"><td class="lft">الإجمالي الكلي</td>'+colTots.map(v=>'<td>'+(v||"—")+'</td>').join("")+'<td>'+grand+'</td></tr>';
-  html+='</tbody></table>';
-  el.innerHTML=html;
-}
-
-// ═══ INVENTORY ════════════════════════════════════════════════════════════════
 function renderInv(){
-  const d1=document.getElementById("inv-d1").value;
-  const d2=document.getElementById("inv-d2").value;
   const all=JSON.parse(localStorage.getItem(K.inv)||"[]");
-  const rows=[];
-  all.forEach(r=>{
-    const rd=r.addedDate||"";
-    (r.items||[]).forEach(p=>{
-      const b1={qty:parseInt(p.batch1?.qty)||0,exp:p.batch1?.exp||""};
-      const b2={qty:parseInt(p.batch2?.qty)||0,exp:p.batch2?.exp||""};
-      rows.push({nameAr:p.nameAr,cat:p.cat,batch1:b1,batch2:b2,site:r.site,addedDate:rd});
-    });
-    if(!r.items&&r.nameAr)rows.push({nameAr:r.nameAr,cat:r.cat,batch1:{qty:parseInt(r.batch1?.qty)||0,exp:r.batch1?.exp||""},batch2:{qty:parseInt(r.batch2?.qty)||0,exp:r.batch2?.exp||""},site:r.site,addedDate:r.addedDate||""});
-  });
-  const filt=rows.filter(r=>{const d=r.addedDate||"";return(!d1||d>=d1)&&(!d2||d<=d2);});
-  const cats=[{k:"ساندويش",ic:"🥪"},{k:"عصائر",ic:"🥤"},{k:"سلطات",ic:"🥗"}];
-  const ns=c=>(c==="ساندويش"?PRODS.sandwich:c==="عصائر"?PRODS.juices:PRODS.salads).map(p=>p.ar);
-  document.getElementById("inv-summary").innerHTML=d1?'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;">'
-    +cats.map(cat=>{
-      const cn=ns(cat.k);
-      const q1=filt.filter(r=>cn.includes(r.nameAr)).reduce((s,r)=>s+(r.batch1.qty||0),0);
-      const q2=filt.filter(r=>cn.includes(r.nameAr)).reduce((s,r)=>s+(r.batch2.qty||0),0);
-      const b1dates=[...new Set(filt.filter(r=>cn.includes(r.nameAr)&&r.batch1.qty>0).map(r=>r.batch1.exp).filter(Boolean))].sort();
-      const b2dates=[...new Set(filt.filter(r=>cn.includes(r.nameAr)&&r.batch2.qty>0).map(r=>r.batch2.exp).filter(Boolean))].sort();
-      return '<div class="kc kc-tl"><div class="kl">'+cat.ic+' '+cat.k+'</div>'
-        +'<div style="margin-top:6px;display:flex;flex-direction:column;gap:5px;">'
-        +'<div style="background:rgba(2,82,83,.07);border-radius:7px;padding:6px 9px;">'
-        +'<div style="font-family:var(--nm);font-weight:900;font-size:1.2rem;color:var(--tl);">'+q1+'</div>'
-        +(b1dates[0]?'<div style="font-size:.75rem;color:var(--tl);font-weight:700;margin-top:2px;">'+fd(b1dates[0])+'</div>':'')
-        +'</div>'
-        +(q2>0?'<div style="background:rgba(199,215,143,.25);border-radius:7px;padding:6px 9px;">'
-          +'<div style="font-family:var(--nm);font-weight:900;font-size:1.2rem;color:var(--gn);">'+q2+'</div>'
-          +(b2dates[0]?'<div style="font-size:.75rem;color:var(--gn);font-weight:700;margin-top:2px;">'+fd(b2dates[0])+'</div>':'')
-          +'</div>':'')
-        +'</div></div>';
-    }).join("")+'</div>':"";
-  const fi=[];
-  filt.forEach(r=>{
-    if(r.batch1.qty>0)fi.push({nameAr:r.nameAr,cat:r.cat,qty:r.batch1.qty,exp:r.batch1.exp,site:r.site,addedDate:r.addedDate});
-    if(r.batch2.qty>0)fi.push({nameAr:r.nameAr,cat:r.cat,qty:r.batch2.qty,exp:r.batch2.exp,site:r.site,addedDate:r.addedDate});
-  });
-  buildProdTable("inv-tbl",fi,"inventory");
+  const reg=typeof curReg!=="undefined"?curReg:"all";
+  const brs=typeof getBrs==="function"?getBrs(reg):all.map(r=>r.site);
+  // فلترة حسب المنطقة
+  const ops=all.filter(r=>brs.length===0||brs.includes(r.site)||reg==="all");
+  ops.sort((a,b)=>b.addedDate>a.addedDate?1:-1);
+  const inv_el=document.getElementById("inv-tbl")||document.getElementById("inv-prod-tbl");
+  const sum_el=document.getElementById("inv-summary");
+
+  if(!ops.length){
+    if(sum_el)sum_el.innerHTML="";
+    if(inv_el)inv_el.innerHTML='<div class="empty-msg">لا توجد عمليات جرد</div>';
+    return;
+  }
+
+  // إذا فيه عملية محددة — اعرض تفاصيلها
+  if(selInvId){
+    const op=ops.find(r=>r.id===selInvId);
+    if(op){showInvDetails(op,ops);return;}
+    selInvId=null;
+  }
+
+  // عرض قائمة العمليات
+  if(sum_el)sum_el.innerHTML="";
+  const EN_={"801":"شعيب","802":"محمد","301":"بسام","201":"وجدان","202":"منيفة","401":"هديل","501":"ملاك","502":"فاتن","601":"نايف"};
+  const rows=ops.map((op,i)=>{
+    const total=(op.items||[]).reduce((s,p)=>{
+      return s+(parseInt(p.batch1?.qty)||0)+(parseInt(p.batch2?.qty)||0);
+    },0);
+    const sn=(op.site||"").replace("فرع ","").split(" - ")[0];
+    const emp=EN_[op.cashier]||op.cashierName||op.cashier||"—";
+    const num=ops.length-i; // رقم العملية (الأحدث = الأعلى)
+    return `<tr style="cursor:pointer;border-top:1px solid rgba(4,42,43,.06);" onclick="selInvId=${op.id};renderInv()">
+      <td style="padding:9px 12px;font-family:var(--nm);font-weight:800;color:var(--tl);">#${num}</td>
+      <td style="padding:9px 12px;font-family:var(--nm);color:#888;">${op.addedDate||"—"}</td>
+      <td style="padding:9px 12px;font-weight:700;">${sn}</td>
+      <td style="padding:9px 12px;">${emp}</td>
+      <td style="padding:9px 12px;text-align:center;font-family:var(--nm);font-weight:800;color:var(--tl);">${total}</td>
+      <td style="padding:9px 12px;text-align:center;">
+        <span style="font-size:.7rem;color:var(--tl);font-weight:700;">عرض ←</span>
+      </td>
+    </tr>`;
+  }).join("");
+
+  const tbl='<table style="width:100%;border-collapse:collapse;font-size:.82rem;">'
+    +'<thead><tr style="background:var(--dk);">'
+    +'<th style="padding:9px 12px;color:var(--sg);font-size:.67rem;"># رقم</th>'
+    +'<th style="padding:9px 12px;color:var(--sg);font-size:.67rem;">التاريخ</th>'
+    +'<th style="padding:9px 12px;color:var(--sg);font-size:.67rem;">الفرع</th>'
+    +'<th style="padding:9px 12px;color:var(--sg);font-size:.67rem;">الكاشير</th>'
+    +'<th style="padding:9px 12px;color:var(--sg);font-size:.67rem;text-align:center;">الوحدات</th>'
+    +'<th style="padding:9px 12px;color:var(--sg);font-size:.67rem;text-align:center;"></th>'
+    +'</tr></thead><tbody>'+rows+'</tbody></table>';
+
+  if(inv_el)inv_el.innerHTML=tbl;
 }
 
-// ═══ BALANCES ════════════════════════════════════════════════════════════════
-function populateBrFilter(){
-  const s=document.getElementById("bal-site-f");if(!s)return;
-  const reg=document.getElementById("bal-reg-f")?.value||"";
-  const brs=reg?getBrs(reg):ALL_BR;
-  s.innerHTML='<option value="">كل الفروع</option>'+brs.map(b=>'<option>'+b+'</option>').join("");
+function showInvDetails(op,ops){
+  const inv_el=document.getElementById("inv-tbl")||document.getElementById("inv-prod-tbl");
+  const sum_el=document.getElementById("inv-summary");
+  const EN_={"801":"شعيب","802":"محمد","301":"بسام","201":"وجدان","202":"منيفة","401":"هديل","501":"ملاك","502":"فاتن","601":"نايف"};
+  const num=ops.length-ops.indexOf(op);
+  const emp=EN_[op.cashier]||op.cashierName||op.cashier||"—";
+  const items=op.items||[];
+  const total=items.reduce((s,p)=>s+(parseInt(p.batch1?.qty)||0)+(parseInt(p.batch2?.qty)||0),0);
+  const fd2=d=>{if(!d)return"—";const[y,m,day]=d.split("-");return day+"/"+m+"/"+y;};
+
+  // Header card
+  if(sum_el){
+    sum_el.innerHTML=`
+    <div style="background:linear-gradient(135deg,var(--dk),var(--tl));border-radius:12px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+      <div>
+        <div style="color:var(--sg);font-size:.7rem;font-weight:700;margin-bottom:4px;">عملية جرد رقم</div>
+        <div style="color:#fff;font-size:1.6rem;font-weight:900;font-family:var(--nm);">#${num}</div>
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;">
+        <div style="text-align:center;"><div style="color:var(--sg);font-size:.65rem;">الفرع</div><div style="color:#fff;font-size:.85rem;font-weight:700;">${(op.site||"").replace("فرع ","").split(" - ")[0]}</div></div>
+        <div style="text-align:center;"><div style="color:var(--sg);font-size:.65rem;">التاريخ</div><div style="color:#fff;font-size:.85rem;font-weight:700;font-family:var(--nm);">${fd2(op.addedDate)}</div></div>
+        <div style="text-align:center;"><div style="color:var(--sg);font-size:.65rem;">الكاشير</div><div style="color:#fff;font-size:.85rem;font-weight:700;">${emp}</div></div>
+        <div style="text-align:center;"><div style="color:var(--sg);font-size:.65rem;">الوحدات</div><div style="color:var(--yw)||#e7dc83;font-size:1rem;font-weight:900;font-family:var(--nm);">${total}</div></div>
+      </div>
+      <button onclick="selInvId=null;renderInv()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-family:var(--fn);font-size:.78rem;font-weight:700;cursor:pointer;">← رجوع للقائمة</button>
+    </div>`;
+  }
+
+  // Products table
+  if(!items.length){if(inv_el)inv_el.innerHTML='<div class="empty-msg">لا توجد منتجات</div>';return;}
+
+  const cats=[{k:"ساندويش",ic:"🥪"},{k:"عصائر",ic:"🥤"},{k:"سلطات",ic:"🥗"}];
+  const CAT_MAP={"sandwich":"ساندويش","juices":"عصائر","salads":"سلطات"};
+  let html='<table style="width:100%;border-collapse:collapse;font-size:.8rem;">'
+    +'<thead><tr style="background:var(--dk);">'
+    +'<th style="padding:8px 12px;color:var(--sg);font-size:.67rem;text-align:right;">المنتج</th>'
+    +'<th style="padding:8px 12px;color:var(--sg);font-size:.67rem;text-align:center;">① الكمية</th>'
+    +'<th style="padding:8px 12px;color:var(--sg);font-size:.67rem;text-align:center;">① الصلاحية</th>'
+    +'<th style="padding:8px 12px;color:var(--sg);font-size:.67rem;text-align:center;">② الكمية</th>'
+    +'<th style="padding:8px 12px;color:var(--sg);font-size:.67rem;text-align:center;">② الصلاحية</th>'
+    +'<th style="padding:8px 12px;color:var(--sg);font-size:.67rem;text-align:center;">الإجمالي</th>'
+    +'</tr></thead><tbody>';
+
+  cats.forEach(cat=>{
+    const catItems=items.filter(p=>CAT_MAP[p.cat]===cat.k||p.cat===cat.k);
+    if(!catItems.length)return;
+    let catTot=0;
+    html+=`<tr style="background:linear-gradient(135deg,rgba(4,42,43,.08),rgba(2,82,83,.05));">
+      <td colspan="6" style="padding:8px 12px;font-weight:900;font-size:.8rem;color:var(--tl);">${cat.ic} ${cat.k}</td></tr>`;
+    catItems.forEach(p=>{
+      const q1=parseInt(p.batch1?.qty)||0;
+      const q2=parseInt(p.batch2?.qty)||0;
+      const tot=q1+q2; catTot+=tot;
+      if(!tot)return;
+      html+=`<tr style="border-top:1px solid rgba(4,42,43,.05);">
+        <td style="padding:7px 12px;font-weight:600;">${p.nameAr}</td>
+        <td style="padding:7px 12px;text-align:center;font-family:var(--nm);font-weight:800;color:var(--tl);">${q1||"—"}</td>
+        <td style="padding:7px 12px;text-align:center;font-family:var(--nm);color:#888;">${q1?fd2(p.batch1?.exp):"—"}</td>
+        <td style="padding:7px 12px;text-align:center;font-family:var(--nm);font-weight:800;color:var(--gn);">${q2||"—"}</td>
+        <td style="padding:7px 12px;text-align:center;font-family:var(--nm);color:#888;">${q2?fd2(p.batch2?.exp):"—"}</td>
+        <td style="padding:7px 12px;text-align:center;font-family:var(--nm);font-weight:900;color:var(--tl);">${tot}</td>
+      </tr>`;
+    });
+    html+=`<tr style="background:rgba(2,82,83,.06);border-top:1px solid rgba(2,82,83,.15);">
+      <td style="padding:7px 12px;font-weight:800;">إجمالي ${cat.k}</td>
+      <td colspan="4"></td>
+      <td style="padding:7px 12px;text-align:center;font-family:var(--nm);font-weight:900;color:var(--tl);">${catTot}</td></tr>`;
+  });
+
+  html+='</tbody></table>';
+  if(inv_el)inv_el.innerHTML=html;
 }
-function clearBalFilters(){
-  ["bal-reg-f","bal-site-f","bal-from-f","bal-to-f"].forEach(id=>{const e=document.getElementById(id);if(e)e.value="";});
-  renderBals();
+
+// ═══ EXPIRY — عرض بالعمليات ══════════════════════════════════════════
+let selExpId=null;
+
+function getExpOps(reg2){
+  const all=JSON.parse(localStorage.getItem(K.exp)||"[]");
+  const brs=typeof getBrs==="function"?getBrs(reg2||"all"):[];
+  return all.filter(r=>!brs.length||brs.includes(r.site)||reg2==="all");
 }
+
+function renderExp(){
+  const reg=typeof curReg!=="undefined"?curReg:"all";
+  const ops=getExpOps(reg);
+  ops.sort((a,b)=>b.addedDate>a.addedDate?1:-1);
+
+  const exp_el=document.getElementById("exp-tbl")||document.getElementById("exp-prod-tbl");
+  const cat_el=document.getElementById("exp-cat");
+  const kpis=["et","et-qty","ec","ep","e-brs","et-s"];
+  kpis.forEach(id=>{const e=document.getElementById(id);if(e)e.textContent="—";});
+  if(cat_el)cat_el.innerHTML="";
+
+  if(!ops.length){
+    if(exp_el)exp_el.innerHTML='<div class="empty-msg">لا توجد عمليات اكسبايري</div>';
+    return;
+  }
+
+  if(selExpId){
+    const op=ops.find(r=>r.id===selExpId);
+    if(op){showExpDetails(op,ops);return;}
+    selExpId=null;
+  }
+
+  // قائمة العمليات
+  const EN_={"801":"شعيب","802":"محمد","301":"بسام","201":"وجدان","202":"منيفة","401":"هديل","501":"ملاك","502":"فاتن","601":"نايف"};
+  const CAT_MAP={"sandwich":"ساندويش","juices":"عصائر","salads":"سلطات"};
+  const norm=c=>CAT_MAP[c]||c;
+  const fd2=d=>{if(!d)return"—";const[y,m,day]=d.split("-");return day+"/"+m+"/"+y;};
+
+  const rows=ops.map((op,i)=>{
+    const items=op.items||[];
+    const totalQty=items.reduce((s,e)=>s+(parseInt(e.qty)||0),0);
+    const cats=[...new Set(items.map(e=>norm(e.cat)).filter(Boolean))].join(" · ");
+    const sn=(op.site||"").replace("فرع ","").split(" - ")[0];
+    const emp=EN_[op.cashier]||op.cashierName||op.cashier||"—";
+    const num=ops.length-i;
+    return `<tr style="cursor:pointer;border-top:1px solid rgba(4,42,43,.06);" onclick="selExpId=${op.id};renderExp()">
+      <td style="padding:9px 12px;font-family:var(--nm);font-weight:800;color:var(--or);">#${num}</td>
+      <td style="padding:9px 12px;font-family:var(--nm);color:#888;">${op.addedDate||"—"}</td>
+      <td style="padding:9px 12px;font-weight:700;">${sn}</td>
+      <td style="padding:9px 12px;">${emp}</td>
+      <td style="padding:9px 12px;font-size:.75rem;color:#888;">${cats}</td>
+      <td style="padding:9px 12px;text-align:center;font-family:var(--nm);font-weight:800;color:var(--rd);">${totalQty} وحدة</td>
+      <td style="padding:9px 12px;text-align:center;"><span style="font-size:.7rem;color:var(--tl);font-weight:700;">عرض ←</span></td>
+    </tr>`;
+  }).join("");
+
+  const tbl='<table style="width:100%;border-collapse:collapse;font-size:.82rem;">'
+    +'<thead><tr style="background:var(--dk);">'
+    +'<th style="padding:9px 12px;color:var(--sg);font-size:.67rem;"># رقم</th>'
+    +'<th style="padding:9px 12px;color:var(--sg);font-size:.67rem;">التاريخ</th>'
+    +'<th style="padding:9px 12px;color:var(--sg);font-size:.67rem;">الفرع</th>'
+    +'<th style="padding:9px 12px;color:var(--sg);font-size:.67rem;">الكاشير</th>'
+    +'<th style="padding:9px 12px;color:var(--sg);font-size:.67rem;">التصنيفات</th>'
+    +'<th style="padding:9px 12px;color:var(--sg);font-size:.67rem;text-align:center;">الوحدات</th>'
+    +'<th></th>'
+    +'</tr></thead><tbody>'+rows+'</tbody></table>';
+
+  if(exp_el)exp_el.innerHTML=tbl;
+}
+
+function showExpDetails(op,ops){
+  const exp_el=document.getElementById("exp-tbl")||document.getElementById("exp-prod-tbl");
+  const cat_el=document.getElementById("exp-cat");
+  const EN_={"801":"شعيب","802":"محمد","301":"بسام","201":"وجدان","202":"منيفة","401":"هديل","501":"ملاك","502":"فاتن","601":"نايف"};
+  const CAT_MAP={"sandwich":"ساندويش","juices":"عصائر","salads":"سلطات"};
+  const norm=c=>CAT_MAP[c]||c;
+  const fd2=d=>{if(!d)return"—";const[y,m,day]=d.split("-");return day+"/"+m+"/"+y;};
+  const num=ops.length-ops.indexOf(op);
+  const emp=EN_[op.cashier]||op.cashierName||op.cashier||"—";
+  const items=op.items||[];
+  const totalQty=items.reduce((s,e)=>s+(parseInt(e.qty)||0),0);
+  // Cost per item
+  const prData=JSON.parse(localStorage.getItem(K.pr)||"{}");
+  const DC={"بوريتو دجاج":3.5,"فيينا دجاج مشوي":3.0,"كلوب دجاج رانش":3.8,"باجيت دجاج رانش":3.6,"اونيون دجاج سبايسي":3.4,"باجيت دجاج فاهيتا":3.5,"باجيت دجاج تندوري":3.7,"شيباتا دجاج باربكيو":3.9,"فوكاتشا جبن حلومي كبير":4.2,"فوكاتشا جبن حلومي صغير":3.2,"بيجلز جبن تيركي":4.0,"باجيت اربع اجبان":3.5,"بيجلز جبن حلومي":3.7,"شيباتا تونة وذرة":3.4,"ليمون بالنعناع":1.5,"مانجو":2.0,"برتقال":1.8,"رمان":2.2,"سلطة فواكه":4.5,"سلطة سيزر":4.2};
+  const getCost=nm=>prData["cost_"+nm]||DC[nm]||0;
+  const totalCost=items.reduce((s,e)=>s+(getCost(e.nameAr)*(parseInt(e.qty)||0)),0);
+
+  // Update KPIs
+  const S=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+  S("et",items.length+" منتج");
+  S("et-qty",totalQty+" وحدة");
+  S("ec",totalCost.toFixed(2)+" ريال");
+  S("et-s","عملية #"+num);
+
+  // Header
+  if(cat_el){
+    cat_el.innerHTML=`
+    <div style="background:linear-gradient(135deg,var(--dk),var(--tl));border-radius:12px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+      <div>
+        <div style="color:var(--sg);font-size:.7rem;font-weight:700;">عملية اكسبايري رقم</div>
+        <div style="color:#fff;font-size:1.6rem;font-weight:900;font-family:var(--nm);">#${num}</div>
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;">
+        <div style="text-align:center;"><div style="color:var(--sg);font-size:.65rem;">الفرع</div><div style="color:#fff;font-size:.85rem;font-weight:700;">${(op.site||"").replace("فرع ","").split(" - ")[0]}</div></div>
+        <div style="text-align:center;"><div style="color:var(--sg);font-size:.65rem;">التاريخ</div><div style="color:#fff;font-size:.85rem;font-weight:700;font-family:var(--nm);">${fd2(op.addedDate)}</div></div>
+        <div style="text-align:center;"><div style="color:var(--sg);font-size:.65rem;">الكاشير</div><div style="color:#fff;font-size:.85rem;font-weight:700;">${emp}</div></div>
+        <div style="text-align:center;"><div style="color:var(--sg);font-size:.65rem;">الوحدات</div><div style="color:var(--rd);font-size:1rem;font-weight:900;font-family:var(--nm);">${totalQty}</div></div>
+        <div style="text-align:center;"><div style="color:var(--sg);font-size:.65rem;">التكلفة</div><div style="color:var(--or);font-size:.9rem;font-weight:900;font-family:var(--nm);">${totalCost.toFixed(0)} ريال</div></div>
+      </div>
+      <button onclick="selExpId=null;renderExp()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-family:var(--fn);font-size:.78rem;font-weight:700;cursor:pointer;">← رجوع للقائمة</button>
+    </div>`;
+  }
+
+  // Items table
+  if(!items.length){if(exp_el)exp_el.innerHTML='<div class="empty-msg">لا توجد منتجات</div>';return;}
+  const es2=exp=>{if(!exp)return{l:"—",c:""};const n=new Date();n.setHours(0,0,0,0);const e=new Date(exp);const d=Math.ceil((e-n)/86400000);if(d<0)return{l:"منتهي ("+Math.abs(d)+" يوم)",c:"b-rd"};if(d===0)return{l:"اليوم!",c:"b-rd"};if(d<=3)return{l:d+" أيام",c:"b-or"};return{l:d+" يوم",c:"b-gn"};};
+
+  const cats=[{k:"ساندويش",ic:"🥪"},{k:"عصائر",ic:"🥤"},{k:"سلطات",ic:"🥗"}];
+  let html='<table style="width:100%;border-collapse:collapse;font-size:.8rem;">'
+    +'<thead><tr style="background:var(--dk);">'
+    +'<th style="padding:8px 12px;color:var(--sg);font-size:.67rem;text-align:right;">المنتج</th>'
+    +'<th style="padding:8px 12px;color:var(--sg);font-size:.67rem;text-align:center;">الكمية</th>'
+    +'<th style="padding:8px 12px;color:var(--sg);font-size:.67rem;text-align:center;">تاريخ الصلاحية</th>'
+    +'<th style="padding:8px 12px;color:var(--sg);font-size:.67rem;text-align:center;">الحالة</th>'
+    +'<th style="padding:8px 12px;color:var(--sg);font-size:.67rem;text-align:center;">التكلفة</th>'
+    +'</tr></thead><tbody>';
+
+  cats.forEach(cat=>{
+    const catItems=items.filter(p=>norm(p.cat)===cat.k);
+    if(!catItems.length)return;
+    let catQty=0,catCost=0;
+    html+=`<tr style="background:linear-gradient(135deg,rgba(4,42,43,.08),rgba(2,82,83,.05));">
+      <td colspan="5" style="padding:8px 12px;font-weight:900;font-size:.8rem;color:var(--tl);">${cat.ic} ${cat.k}</td></tr>`;
+    catItems.forEach(p=>{
+      const q=parseInt(p.qty)||0;
+      const c=getCost(p.nameAr)*q;
+      catQty+=q;catCost+=c;
+      const st=es2(p.exp);
+      html+=`<tr style="border-top:1px solid rgba(4,42,43,.05);">
+        <td style="padding:7px 12px;font-weight:600;">${p.nameAr}</td>
+        <td style="padding:7px 12px;text-align:center;font-family:var(--nm);font-weight:800;color:var(--rd);">${q}</td>
+        <td style="padding:7px 12px;text-align:center;font-family:var(--nm);color:#888;">${fd2(p.exp)}</td>
+        <td style="padding:7px 12px;text-align:center;"><span class="badge ${st.c}" style="font-size:.63rem;">${st.l}</span></td>
+        <td style="padding:7px 12px;text-align:center;font-family:var(--nm);color:var(--or);">${c.toFixed(2)}</td>
+      </tr>`;
+    });
+    html+=`<tr style="background:rgba(2,82,83,.06);border-top:1px solid rgba(2,82,83,.15);">
+      <td style="padding:7px 12px;font-weight:800;">إجمالي ${cat.k}</td>
+      <td style="padding:7px 12px;text-align:center;font-family:var(--nm);font-weight:900;color:var(--rd);">${catQty}</td>
+      <td colspan="2"></td>
+      <td style="padding:7px 12px;text-align:center;font-family:var(--nm);font-weight:900;color:var(--or);">${catCost.toFixed(2)}</td></tr>`;
+  });
+  html+='</tbody></table>';
+  if(exp_el)exp_el.innerHTML=html;
+}
+
+
 function renderBals(){
   populateBrFilter();
   const reg   = document.getElementById("bal-reg-f")?.value||"";
@@ -1207,7 +1369,7 @@ function exportBals(){
 
 // ═══ NEEDS ════════════════════════════════════════════════════════════════════
 function renderNeeds(){
-  const wk=ws();const nds=JSON.parse(localStorage.getItem(K.nd)||"[]").filter(n=>inWk(n.addedDate,wk));
+  const nds=JSON.parse(localStorage.getItem(K.nd)||"[]");
   const checks=JSON.parse(localStorage.getItem(K.nc)||"{}");
   const all=[];nds.forEach(n=>(n.items||[]).forEach((it,i)=>all.push({...it,site:n.site,key:n.id+"_"+i})));
   const tc=all.reduce((s,it)=>s+(pr(it.name)*(it.qty||1)),0);
