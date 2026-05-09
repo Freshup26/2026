@@ -5,14 +5,16 @@
 
 // ── 1. FIREBASE CONFIG ──────────────────────────────────────────────
 //  ❗ استبدل هذه القيم بإعدادات مشروعك في Firebase Console
-var FIREBASE_CONFIG = {
-  apiKey:            "YOUR_API_KEY",
-  authDomain:        "YOUR_PROJECT_ID.firebaseapp.com",
-  databaseURL:       "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
-  projectId:         "YOUR_PROJECT_ID",
-  storageBucket:     "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId:             "YOUR_APP_ID"
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyBD0qRg-7-Ixn6PXJZiHhhmWqjEtW-eIiM",
+  authDomain: "freshup-2026.firebaseapp.com",
+  databaseURL: "https://freshup-2026-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "freshup-2026",
+  storageBucket: "freshup-2026.firebasestorage.app",
+  messagingSenderId: "987696801684",
+  appId: "1:987696801684:web:c1544fa7baaddcaf341181",
+  measurementId: "G-7XN0SCESD4"
 };
 
 // ── 2. المفاتيح المشتركة بين الأنظمة الثلاثة ──────────────────────
