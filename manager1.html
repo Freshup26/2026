@@ -834,138 +834,273 @@ function renderCompare(){
 
 // ═══ EXPIRY ════════════════════════════════════════════════════════════════════
 // ═══ INVENTORY — عرض بالعمليات ════════════════════════════════════
-let selInvId=null; // العملية المحددة حالياً
 
-function renderInv(){
-  const all=JSON.parse(localStorage.getItem(K.inv)||"[]");
-  const reg=typeof curReg!=="undefined"?curReg:"all";
-  const brs=typeof getBrs==="function"?getBrs(reg):all.map(r=>r.site);
-  // فلترة حسب المنطقة
-  const ops=all.filter(r=>brs.length===0||brs.includes(r.site)||reg==="all");
-  ops.sort((a,b)=>b.addedDate>a.addedDate?1:-1);
-  const inv_el=document.getElementById("inv-tbl")||document.getElementById("inv-prod-tbl");
-  const sum_el=document.getElementById("inv-summary");
+// ═══ INVENTORY COMPARE — شبكة مقارنة الفروع ════════════════════════
+let invTab="ops";
 
-  if(!ops.length){
-    if(sum_el)sum_el.innerHTML="";
-    if(inv_el)inv_el.innerHTML='<div class="empty-msg">لا توجد عمليات جرد</div>';
-    return;
+function setInvTab(tab,btn){
+  invTab=tab;
+  document.querySelectorAll("#view-inventory .ptab").forEach(b=>b.classList.remove("active"));
+  if(btn)btn.classList.add("active");
+  document.getElementById("inv-ops-section").style.display=tab==="ops"?"":"none";
+  document.getElementById("inv-compare-section").style.display=tab==="compare"?"":"none";
+  if(tab==="compare"){
+    if(!document.getElementById("inv-cmp-date").value){
+      document.getElementById("inv-cmp-date").value=new Date().toISOString().split("T")[0];
+    }
+    renderInvCompare();
+  } else {
+    selInvId=null;renderInv();
   }
-
-  // إذا فيه عملية محددة — اعرض تفاصيلها
-  if(selInvId){
-    const op=ops.find(r=>r.id===selInvId);
-    if(op){showInvDetails(op,ops);return;}
-    selInvId=null;
-  }
-
-  // عرض قائمة العمليات
-  if(sum_el)sum_el.innerHTML="";
-  const EN_={"801":"شعيب","802":"محمد","301":"بسام","201":"وجدان","202":"منيفة","401":"هديل","501":"ملاك","502":"فاتن","601":"نايف"};
-  const rows=ops.map((op,i)=>{
-    const total=(op.items||[]).reduce((s,p)=>{
-      return s+(parseInt(p.batch1?.qty)||0)+(parseInt(p.batch2?.qty)||0);
-    },0);
-    const sn=(op.site||"").replace("فرع ","").split(" - ")[0];
-    const emp=EN_[op.cashier]||op.cashierName||op.cashier||"—";
-    const num=ops.length-i; // رقم العملية (الأحدث = الأعلى)
-    return `<tr style="cursor:pointer;border-top:1px solid rgba(4,42,43,.06);" onclick="selInvId=${op.id};renderInv()">
-      <td style="padding:9px 12px;font-family:var(--nm);font-weight:800;color:var(--tl);">#${num}</td>
-      <td style="padding:9px 12px;font-family:var(--nm);color:#888;">${op.addedDate||"—"}</td>
-      <td style="padding:9px 12px;font-weight:700;">${sn}</td>
-      <td style="padding:9px 12px;">${emp}</td>
-      <td style="padding:9px 12px;text-align:center;font-family:var(--nm);font-weight:800;color:var(--tl);">${total}</td>
-      <td style="padding:9px 12px;text-align:center;">
-        <span style="font-size:.7rem;color:var(--tl);font-weight:700;">عرض ←</span>
-      </td>
-    </tr>`;
-  }).join("");
-
-  const tbl='<table style="width:100%;border-collapse:collapse;font-size:.82rem;">'
-    +'<thead><tr style="background:var(--dk);">'
-    +'<th style="padding:9px 12px;color:var(--sg);font-size:.67rem;"># رقم</th>'
-    +'<th style="padding:9px 12px;color:var(--sg);font-size:.67rem;">التاريخ</th>'
-    +'<th style="padding:9px 12px;color:var(--sg);font-size:.67rem;">الفرع</th>'
-    +'<th style="padding:9px 12px;color:var(--sg);font-size:.67rem;">الكاشير</th>'
-    +'<th style="padding:9px 12px;color:var(--sg);font-size:.67rem;text-align:center;">الوحدات</th>'
-    +'<th style="padding:9px 12px;color:var(--sg);font-size:.67rem;text-align:center;"></th>'
-    +'</tr></thead><tbody>'+rows+'</tbody></table>';
-
-  if(inv_el)inv_el.innerHTML=tbl;
 }
 
-function showInvDetails(op,ops){
-  const inv_el=document.getElementById("inv-tbl")||document.getElementById("inv-prod-tbl");
-  const sum_el=document.getElementById("inv-summary");
-  const EN_={"801":"شعيب","802":"محمد","301":"بسام","201":"وجدان","202":"منيفة","401":"هديل","501":"ملاك","502":"فاتن","601":"نايف"};
-  const num=ops.length-ops.indexOf(op);
-  const emp=EN_[op.cashier]||op.cashierName||op.cashier||"—";
-  const items=op.items||[];
-  const total=items.reduce((s,p)=>s+(parseInt(p.batch1?.qty)||0)+(parseInt(p.batch2?.qty)||0),0);
-  const fd2=d=>{if(!d)return"—";const[y,m,day]=d.split("-");return day+"/"+m+"/"+y;};
+function renderInvCompare(){
+  const d1=document.getElementById("inv-cmp-d1")?.value;
+  const d2=document.getElementById("inv-cmp-d2")?.value;
+  const selCat=document.getElementById("inv-cmp-cat")?.value||"all";
+  const kpiEl=document.getElementById("inv-cmp-kpis");
+  const tblEl=document.getElementById("inv-cmp-tbl");
 
-  // Header card
-  if(sum_el){
-    sum_el.innerHTML=`
-    <div style="background:linear-gradient(135deg,var(--dk),var(--tl));border-radius:12px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-      <div>
-        <div style="color:var(--sg);font-size:.7rem;font-weight:700;margin-bottom:4px;">عملية جرد رقم</div>
-        <div style="color:#fff;font-size:1.6rem;font-weight:900;font-family:var(--nm);">#${num}</div>
-      </div>
-      <div style="display:flex;gap:16px;flex-wrap:wrap;">
-        <div style="text-align:center;"><div style="color:var(--sg);font-size:.65rem;">الفرع</div><div style="color:#fff;font-size:.85rem;font-weight:700;">${(op.site||"").replace("فرع ","").split(" - ")[0]}</div></div>
-        <div style="text-align:center;"><div style="color:var(--sg);font-size:.65rem;">التاريخ</div><div style="color:#fff;font-size:.85rem;font-weight:700;font-family:var(--nm);">${fd2(op.addedDate)}</div></div>
-        <div style="text-align:center;"><div style="color:var(--sg);font-size:.65rem;">الكاشير</div><div style="color:#fff;font-size:.85rem;font-weight:700;">${emp}</div></div>
-        <div style="text-align:center;"><div style="color:var(--sg);font-size:.65rem;">الوحدات</div><div style="color:var(--yw)||#e7dc83;font-size:1rem;font-weight:900;font-family:var(--nm);">${total}</div></div>
-      </div>
-      <button onclick="selInvId=null;renderInv()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-family:var(--fn);font-size:.78rem;font-weight:700;cursor:pointer;">← رجوع للقائمة</button>
-    </div>`;
+  if(!d1&&!d2){tblEl.innerHTML='<div class="empty-msg">حدد تاريخاً واحداً على الأقل</div>';if(kpiEl)kpiEl.innerHTML="";return;}
+
+  const all=JSON.parse(localStorage.getItem(K.inv)||"[]");
+  const CAT_MAP={"sandwich":"ساندويش","juices":"عصائر","salads":"سلطات"};
+  const norm=c=>CAT_MAP[c]||c;
+  const fd2=d=>{if(!d)return"—";const[y,m,day]=d.split("-");return day+"/"+m;};
+
+  // Collect ops for each date
+  function opsForDate(dt){
+    return all.filter(r=>r.addedDate===dt);
+  }
+  const ops1=d1?opsForDate(d1):[];
+  const ops2=d2?opsForDate(d2):[];
+
+  if(!ops1.length&&!ops2.length){
+    tblEl.innerHTML='<div class="empty-msg">لا توجد عمليات جرد في التاريخين المحددين</div>';
+    if(kpiEl)kpiEl.innerHTML="";return;
   }
 
-  // Products table
-  if(!items.length){if(inv_el)inv_el.innerHTML='<div class="empty-msg">لا توجد منتجات</div>';return;}
+  // Build product data per date: {nameAr: {cat, d1:{branches}, d2:{branches}}}
+  function buildProdBranches(ops){
+    const data={};
+    ops.forEach(op=>{
+      const sn=(op.site||"").replace("فرع ","").split(" - ")[0];
+      (op.items||[]).forEach(p=>{
+        const catAr=norm(p.cat);
+        if(selCat!=="all"&&p.cat!==selCat&&catAr!==CAT_MAP[selCat])return;
+        if(!data[p.nameAr])data[p.nameAr]={cat:catAr,branches:{}};
+        if(!data[p.nameAr].branches[sn])data[p.nameAr].branches[sn]={q1:0,e1:"",q2:0,e2:""};
+        const b=data[p.nameAr].branches[sn];
+        b.q1+=parseInt(p.batch1?.qty)||0;
+        b.q2+=parseInt(p.batch2?.qty)||0;
+        if(!b.e1&&p.batch1?.exp)b.e1=p.batch1.exp;
+        if(!b.e2&&p.batch2?.exp)b.e2=p.batch2.exp;
+      });
+    });
+    return data;
+  }
+
+  const pd1=buildProdBranches(ops1);
+  const pd2=buildProdBranches(ops2);
+
+  // Merged product list
+  const allProds=new Set([...Object.keys(pd1),...Object.keys(pd2)]);
+  // All branches across both dates
+  const allBranches=new Set();
+  [...ops1,...ops2].forEach(op=>allBranches.add((op.site||"").replace("فرع ","").split(" - ")[0]));
+  const branches=[...allBranches].sort();
+
+  // KPIs
+  const tot1=Object.values(pd1).reduce((s,p)=>s+Object.values(p.branches).reduce((ss,b)=>ss+(b.q1||0)+(b.q2||0),0),0);
+  const tot2=Object.values(pd2).reduce((s,p)=>s+Object.values(p.branches).reduce((ss,b)=>ss+(b.q1||0)+(b.q2||0),0),0);
+  const diff=tot2-tot1;
+
+  if(kpiEl){
+    const dualMode=d1&&d2;
+    kpiEl.innerHTML='<div style="display:grid;grid-template-columns:repeat('+(dualMode?5:3)+',1fr);gap:10px;margin-bottom:14px;">'
+      +(d1?'<div class="kc kc-tl"><div class="kl">📅 إجمالي ① '+fd2(d1)+'</div><div class="kv">'+tot1+'</div><div class="ks">وحدة</div></div>':"")
+      +(d2?'<div class="kc kc-gn"><div class="kl">📅 إجمالي ② '+fd2(d2)+'</div><div class="kv">'+tot2+'</div><div class="ks">وحدة</div></div>':"")
+      +(dualMode?'<div class="kc '+(diff>0?"kc-gn":diff<0?"kc-rd":"kc-tl")+'"><div class="kl">📊 الفرق</div><div class="kv" style="font-size:1.1rem;">'+(diff>0?"+":"")+diff+'</div><div class="ks">'+(diff>0?"زيادة":diff<0?"نقص":"لا تغيير")+'</div></div>':"")
+      +'<div class="kc kc-tl"><div class="kl">🏪 الفروع</div><div class="kv">'+branches.length+'</div><div class="ks">فرع</div></div>'
+      +'<div class="kc kc-or"><div class="kl">📦 الأصناف</div><div class="kv">'+allProds.size+'</div><div class="ks">صنف</div></div>'
+      +'</div>';
+  }
+
+  // Build table
+  // Columns: branch cols, each repeated for d1/d2 + diff if both dates
+  const dualMode=d1&&d2;
+  const colSpan=dualMode?3:1; // ①, ②, فرق  OR  just qty
+
+  let html='<div style="overflow-x:auto;border-radius:10px;box-shadow:0 2px 14px rgba(4,42,43,.08);">'
+    +'<table style="width:100%;border-collapse:collapse;font-size:.74rem;min-width:'+(180+branches.length*colSpan*80)+'px;">';
+
+  // Header row 1: branch names (span colSpan each)
+  html+='<thead>';
+  html+='<tr style="background:var(--dk);">'
+    +'<th rowspan="2" style="padding:9px 12px;text-align:right;color:var(--sg);font-size:.66rem;position:sticky;right:0;background:var(--dk);z-index:2;min-width:130px;">المنتج</th>'
+    +branches.map(sn=>'<th colspan="'+colSpan+'" style="padding:8px;text-align:center;color:var(--sg);font-size:.68rem;font-weight:700;border-left:1px solid rgba(255,255,255,.07);">'+sn+'</th>').join("")
+    +'<th colspan="'+(dualMode?3:1)+'" style="padding:8px;text-align:center;color:#e7dc83;font-size:.68rem;background:rgba(255,255,255,.06);border-left:1px solid rgba(255,255,255,.07);">المجموع</th>'
+    +'</tr>';
+
+  if(dualMode){
+    html+='<tr style="background:rgba(4,42,43,.9);">'
+      +branches.flatMap(()=>[
+        '<th style="padding:5px 6px;text-align:center;font-size:.62rem;color:rgba(199,215,143,.7);border-left:1px solid rgba(255,255,255,.05);">① '+fd2(d1)+'</th>',
+        '<th style="padding:5px 6px;text-align:center;font-size:.62rem;color:rgba(30,158,94,.9);">② '+fd2(d2)+'</th>',
+        '<th style="padding:5px 6px;text-align:center;font-size:.62rem;color:#e0a060;">فرق</th>'
+      ]).join("")
+      +'<th style="padding:5px 6px;text-align:center;font-size:.62rem;color:rgba(199,215,143,.7);background:rgba(255,255,255,.04);">① '+fd2(d1)+'</th>'
+      +'<th style="padding:5px 6px;text-align:center;font-size:.62rem;color:rgba(30,158,94,.9);">② '+fd2(d2)+'</th>'
+      +'<th style="padding:5px 6px;text-align:center;font-size:.62rem;color:#e0a060;">فرق</th>'
+      +'</tr>';
+  }
+  html+='</thead><tbody>';
+
+  // Color helpers
+  function qColor(q,maxQ){
+    if(!q)return"rgba(4,42,43,.03)";
+    const p=q/maxQ;
+    if(p>=0.7)return"rgba(30,158,94,.12)";
+    if(p>=0.35)return"rgba(2,82,83,.08)";
+    return"rgba(212,114,31,.09)";
+  }
+  function diffColor(d){
+    if(d>0)return"color:var(--gn);font-weight:800;";
+    if(d<0)return"color:var(--rd);font-weight:800;";
+    return"color:#aaa;";
+  }
 
   const cats=[{k:"ساندويش",ic:"🥪"},{k:"عصائر",ic:"🥤"},{k:"سلطات",ic:"🥗"}];
-  const CAT_MAP={"sandwich":"ساندويش","juices":"عصائر","salads":"سلطات"};
-  let html='<table style="width:100%;border-collapse:collapse;font-size:.8rem;">'
-    +'<thead><tr style="background:var(--dk);">'
-    +'<th style="padding:8px 12px;color:var(--sg);font-size:.67rem;text-align:right;">المنتج</th>'
-    +'<th style="padding:8px 12px;color:var(--sg);font-size:.67rem;text-align:center;">① الكمية</th>'
-    +'<th style="padding:8px 12px;color:var(--sg);font-size:.67rem;text-align:center;">① الصلاحية</th>'
-    +'<th style="padding:8px 12px;color:var(--sg);font-size:.67rem;text-align:center;">② الكمية</th>'
-    +'<th style="padding:8px 12px;color:var(--sg);font-size:.67rem;text-align:center;">② الصلاحية</th>'
-    +'<th style="padding:8px 12px;color:var(--sg);font-size:.67rem;text-align:center;">الإجمالي</th>'
-    +'</tr></thead><tbody>';
+  const filtCats=selCat==="all"?cats:[cats.find(c=>c.k===CAT_MAP[selCat]||c.k===selCat)||cats[0]];
+  const transfers=[];
 
-  cats.forEach(cat=>{
-    const catItems=items.filter(p=>CAT_MAP[p.cat]===cat.k||p.cat===cat.k);
-    if(!catItems.length)return;
-    let catTot=0;
-    html+=`<tr style="background:linear-gradient(135deg,rgba(4,42,43,.08),rgba(2,82,83,.05));">
-      <td colspan="6" style="padding:8px 12px;font-weight:900;font-size:.8rem;color:var(--tl);">${cat.ic} ${cat.k}</td></tr>`;
-    catItems.forEach(p=>{
-      const q1=parseInt(p.batch1?.qty)||0;
-      const q2=parseInt(p.batch2?.qty)||0;
-      const tot=q1+q2; catTot+=tot;
-      if(!tot)return;
-      html+=`<tr style="border-top:1px solid rgba(4,42,43,.05);">
-        <td style="padding:7px 12px;font-weight:600;">${p.nameAr}</td>
-        <td style="padding:7px 12px;text-align:center;font-family:var(--nm);font-weight:800;color:var(--tl);">${q1||"—"}</td>
-        <td style="padding:7px 12px;text-align:center;font-family:var(--nm);color:#888;">${q1?fd2(p.batch1?.exp):"—"}</td>
-        <td style="padding:7px 12px;text-align:center;font-family:var(--nm);font-weight:800;color:var(--gn);">${q2||"—"}</td>
-        <td style="padding:7px 12px;text-align:center;font-family:var(--nm);color:#888;">${q2?fd2(p.batch2?.exp):"—"}</td>
-        <td style="padding:7px 12px;text-align:center;font-family:var(--nm);font-weight:900;color:var(--tl);">${tot}</td>
-      </tr>`;
+  filtCats.forEach(cat=>{
+    const catProds=[...allProds].filter(nm=>{
+      const d=pd1[nm]||pd2[nm];return d&&d.cat===cat.k;
     });
-    html+=`<tr style="background:rgba(2,82,83,.06);border-top:1px solid rgba(2,82,83,.15);">
-      <td style="padding:7px 12px;font-weight:800;">إجمالي ${cat.k}</td>
-      <td colspan="4"></td>
-      <td style="padding:7px 12px;text-align:center;font-family:var(--nm);font-weight:900;color:var(--tl);">${catTot}</td></tr>`;
+    if(!catProds.length)return;
+
+    html+='<tr style="background:linear-gradient(135deg,rgba(4,42,43,.1),rgba(2,82,83,.06));">'
+      +'<td colspan="'+(branches.length*colSpan+(dualMode?3:1)+1)+'" style="padding:9px 12px;font-weight:900;font-size:.79rem;color:var(--tl);">'+cat.ic+' '+cat.k+'</td></tr>';
+
+    // Per-cat max for color scale
+    const catMaxQ=Math.max(...catProds.flatMap(nm=>branches.map(sn=>{
+      const q1=(pd1[nm]?.branches[sn]?.q1||0)+(pd1[nm]?.branches[sn]?.q2||0);
+      const q2=(pd2[nm]?.branches[sn]?.q1||0)+(pd2[nm]?.branches[sn]?.q2||0);
+      return Math.max(q1,q2);
+    })),1);
+
+    catProds.forEach(nm=>{
+      const totD1_row=branches.reduce((s,sn)=>s+(pd1[nm]?.branches[sn]?.q1||0)+(pd1[nm]?.branches[sn]?.q2||0),0);
+      const totD2_row=branches.reduce((s,sn)=>s+(pd2[nm]?.branches[sn]?.q1||0)+(pd2[nm]?.branches[sn]?.q2||0),0);
+      const rowDiff=totD2_row-totD1_row;
+      const zeroD2=d2?branches.filter(sn=>!((pd2[nm]?.branches[sn]?.q1||0)+(pd2[nm]?.branches[sn]?.q2||0))).length:0;
+
+      html+='<tr style="border-top:1px solid rgba(4,42,43,.05);">'
+        +'<td style="padding:7px 12px;font-weight:600;position:sticky;right:0;background:#fff;z-index:1;border-left:1px solid rgba(4,42,43,.06);">'
+        +(zeroD2>0&&d2?'<span style="font-size:.61rem;background:rgba(192,57,43,.1);color:var(--rd);border-radius:4px;padding:1px 5px;margin-left:4px;">'+zeroD2+'⬇</span>':"")
+        +nm+'</td>'
+        +branches.map(sn=>{
+          const v1=(pd1[nm]?.branches[sn]?.q1||0)+(pd1[nm]?.branches[sn]?.q2||0);
+          const v2=(pd2[nm]?.branches[sn]?.q1||0)+(pd2[nm]?.branches[sn]?.q2||0);
+          const bDiff=v2-v1;
+          const e1=pd1[nm]?.branches[sn]?.e1;
+          const e2=pd2[nm]?.branches[sn]?.e1;
+          if(dualMode){
+            return '<td style="padding:5px 7px;text-align:center;background:'+qColor(v1,catMaxQ)+';border-left:1px solid rgba(4,42,43,.04);">'
+              +(v1?'<div style="font-size:.8rem;font-family:var(--nm);font-weight:700;">'+v1+'</div>'+(e1?'<div style="font-size:.58rem;color:#aaa;">'+fd2(e1)+'</div>':""):'<span style="color:#ddd;">—</span>')+'</td>'
+              +'<td style="padding:5px 7px;text-align:center;background:'+qColor(v2,catMaxQ)+';">'
+              +(v2?'<div style="font-size:.8rem;font-family:var(--nm);font-weight:700;">'+v2+'</div>'+(e2?'<div style="font-size:.58rem;color:#aaa;">'+fd2(e2)+'</div>':""):'<span style="color:#ddd;">—</span>')+'</td>'
+              +'<td style="padding:5px 7px;text-align:center;font-family:var(--nm);font-size:.79rem;'+diffColor(bDiff)+'">'
+              +(bDiff===0?"=":(bDiff>0?"+":"")+bDiff)+'</td>';
+          } else {
+            const v=d1?v1:v2;
+            return '<td style="padding:6px 8px;text-align:center;background:'+qColor(v,catMaxQ)+';font-family:var(--nm);font-weight:700;">'+(v||'<span style="color:#ddd;">—</span>')+'</td>';
+          }
+        }).join("")
+        // Row totals
+        +(dualMode
+          ?'<td style="padding:5px 8px;text-align:center;background:rgba(2,82,83,.07);font-family:var(--nm);font-weight:900;color:var(--tl);border-left:2px solid rgba(2,82,83,.15);">'+totD1_row+'</td>'
+           +'<td style="padding:5px 8px;text-align:center;background:rgba(30,158,94,.08);font-family:var(--nm);font-weight:900;color:var(--gn);">'+totD2_row+'</td>'
+           +'<td style="padding:5px 8px;text-align:center;font-family:var(--nm);font-size:.82rem;'+diffColor(rowDiff)+'">'+(rowDiff===0?"=":(rowDiff>0?"+":"")+rowDiff)+'</td>'
+          :'<td style="padding:5px 8px;text-align:center;background:rgba(2,82,83,.07);font-family:var(--nm);font-weight:900;color:var(--tl);">'+(d1?totD1_row:totD2_row)+'</td>'
+        )
+        +'</tr>';
+
+      // Transfer suggestion: compare d2 branches
+      if(dualMode){
+        const d2Qtys=branches.map(sn=>(pd2[nm]?.branches[sn]?.q1||0)+(pd2[nm]?.branches[sn]?.q2||0));
+        const mx=Math.max(...d2Qtys);
+        const mn=Math.min(...d2Qtys);
+        if(mx-mn>=4&&mx/Math.max(mn,0.1)>=2){
+          const fromSn=branches[d2Qtys.indexOf(mx)];
+          const toSn=branches[d2Qtys.indexOf(mn)];
+          transfers.push({nm,fromSn,toSn,fromQ:mx,toQ:mn,diff:mx-mn});
+        }
+      }
+    });
+
+    // Category totals
+    const catT1=branches.map(sn=>catProds.reduce((s,nm)=>s+(pd1[nm]?.branches[sn]?.q1||0)+(pd1[nm]?.branches[sn]?.q2||0),0));
+    const catT2=branches.map(sn=>catProds.reduce((s,nm)=>s+(pd2[nm]?.branches[sn]?.q1||0)+(pd2[nm]?.branches[sn]?.q2||0),0));
+    const cG1=catT1.reduce((s,v)=>s+v,0),cG2=catT2.reduce((s,v)=>s+v,0);
+    html+='<tr style="background:rgba(2,82,83,.07);border-top:2px solid rgba(2,82,83,.15);">'
+      +'<td style="padding:8px 12px;font-weight:900;font-size:.79rem;color:var(--tl);position:sticky;right:0;background:rgba(2,82,83,.07);">إجمالي '+cat.k+'</td>'
+      +branches.map((_,bi)=>{
+        const v1=catT1[bi],v2=catT2[bi],d=v2-v1;
+        return dualMode
+          ?'<td style="padding:7px;text-align:center;font-family:var(--nm);font-weight:900;color:var(--tl);border-left:1px solid rgba(2,82,83,.1);">'+v1+'</td>'
+           +'<td style="padding:7px;text-align:center;font-family:var(--nm);font-weight:900;color:var(--gn);">'+v2+'</td>'
+           +'<td style="padding:7px;text-align:center;font-family:var(--nm);'+diffColor(d)+'">'+(d===0?"=":(d>0?"+":"")+d)+'</td>'
+          :'<td style="padding:7px;text-align:center;font-family:var(--nm);font-weight:900;color:var(--tl);">'+(d1?v1:v2)+'</td>';
+      }).join("")
+      +(dualMode
+        ?'<td style="padding:7px;text-align:center;font-family:var(--nm);font-weight:900;color:var(--tl);border-left:2px solid rgba(2,82,83,.2);">'+cG1+'</td>'
+         +'<td style="padding:7px;text-align:center;font-family:var(--nm);font-weight:900;color:var(--gn);">'+cG2+'</td>'
+         +'<td style="padding:7px;text-align:center;font-family:var(--nm);'+diffColor(cG2-cG1)+'">'+(cG2-cG1===0?"=":((cG2-cG1>0?"+":"")+(cG2-cG1)))+'</td>'
+        :'<td style="padding:7px;text-align:center;font-family:var(--nm);font-weight:900;color:var(--tl);">'+(d1?cG1:cG2)+'</td>'
+      )+'</tr>';
   });
 
-  html+='</tbody></table>';
-  if(inv_el)inv_el.innerHTML=html;
+  // Grand total row
+  const gT1=branches.map(sn=>[...allProds].reduce((s,nm)=>s+(pd1[nm]?.branches[sn]?.q1||0)+(pd1[nm]?.branches[sn]?.q2||0),0));
+  const gT2=branches.map(sn=>[...allProds].reduce((s,nm)=>s+(pd2[nm]?.branches[sn]?.q1||0)+(pd2[nm]?.branches[sn]?.q2||0),0));
+  const gG1=gT1.reduce((s,v)=>s+v,0),gG2=gT2.reduce((s,v)=>s+v,0);
+  html+='<tr style="background:rgba(4,42,43,.09);border-top:3px solid var(--tl);">'
+    +'<td style="padding:9px 12px;font-weight:900;font-size:.81rem;position:sticky;right:0;background:rgba(4,42,43,.09);">الإجمالي الكلي</td>'
+    +branches.map((_,bi)=>{
+      const v1=gT1[bi],v2=gT2[bi],d=v2-v1;
+      return dualMode
+        ?'<td style="padding:8px;text-align:center;font-family:var(--nm);font-weight:900;font-size:.88rem;color:var(--tl);border-left:1px solid rgba(2,82,83,.1);">'+v1+'</td>'
+         +'<td style="padding:8px;text-align:center;font-family:var(--nm);font-weight:900;font-size:.88rem;color:var(--gn);">'+v2+'</td>'
+         +'<td style="padding:8px;text-align:center;font-family:var(--nm);font-size:.82rem;'+diffColor(d)+'">'+(d===0?"=":(d>0?"+":"")+d)+'</td>'
+        :'<td style="padding:8px;text-align:center;font-family:var(--nm);font-weight:900;color:var(--tl);">'+(d1?v1:v2)+'</td>';
+    }).join("")
+    +(dualMode
+      ?'<td style="padding:8px;text-align:center;font-family:var(--nm);font-weight:900;font-size:.9rem;color:var(--tl);border-left:2px solid var(--tl);">'+gG1+'</td>'
+       +'<td style="padding:8px;text-align:center;font-family:var(--nm);font-weight:900;font-size:.9rem;color:var(--gn);">'+gG2+'</td>'
+       +'<td style="padding:8px;text-align:center;font-family:var(--nm);font-size:.84rem;font-weight:800;'+diffColor(gG2-gG1)+'">'+(gG2-gG1===0?"=":((gG2-gG1>0?"+":"")+(gG2-gG1)))+'</td>'
+      :'<td style="padding:8px;text-align:center;font-family:var(--nm);font-weight:900;color:var(--tl);">'+(d1?gG1:gG2)+'</td>'
+    )+'</tr>';
+
+  html+='</tbody></table></div>';
+
+  // Transfer suggestions
+  if(transfers.length){
+    html+='<div class="card" style="margin-top:14px;"><div class="ch"><div class="ct">🔄 اقتراحات النقل بين الفروع (حسب ②)</div></div><div style="padding:12px;">'
+      +transfers.slice(0,10).map(t=>'<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--cd);border-radius:8px;margin-bottom:5px;">'
+        +'<span style="flex:1;font-size:.81rem;font-weight:700;">'+t.nm+'</span>'
+        +'<span style="background:rgba(30,158,94,.12);color:var(--gn);border-radius:6px;padding:3px 10px;font-size:.78rem;font-weight:700;">'+t.fromSn+' ('+t.fromQ+')</span>'
+        +'<span style="color:#aaa;font-size:.75rem;">← نقل إلى</span>'
+        +'<span style="background:rgba(212,114,31,.12);color:var(--or);border-radius:6px;padding:3px 10px;font-size:.78rem;font-weight:700;">'+t.toSn+' ('+t.toQ+')</span>'
+        +'<span class="badge b-rd" style="font-size:.64rem;">فرق '+t.diff+'</span>'
+        +'</div>').join("")
+      +'</div></div>';
+  }
+
+  tblEl.innerHTML=html;
 }
+
 
 // ═══ EXPIRY — عرض بالعمليات ══════════════════════════════════════════
 let selExpId=null;
