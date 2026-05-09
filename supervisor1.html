@@ -899,9 +899,6 @@ function renderInvCompare(){
 
   // Row 1: branch names
   // Add info note above table
-  const noteHtml='<div style="background:rgba(2,82,83,.07);border:1px solid rgba(2,82,83,.15);border-radius:8px;padding:8px 13px;margin-bottom:10px;font-size:.75rem;color:var(--tl);display:flex;align-items:center;gap:7px;">'
-    +'<span>📌</span><span>الأعمدة تمثل <strong>تاريخ رفع الجرد</strong>. الأرقام الصغيرة (ص: ...) = <strong>تاريخ الصلاحية</strong> وليس تاريخ الإدخال.</span></div>';
-  html=noteHtml+html;
   html+='<thead><tr style="background:var(--dk);">'
     +'<th rowspan="'+(dualMode?2:1)+'" style="padding:9px 12px;text-align:right;color:var(--sg);font-size:.66rem;position:sticky;right:0;background:var(--dk);z-index:2;min-width:130px;">المنتج</th>'
     +branches.map(sn=>'<th colspan="'+colsPerBr+'" style="padding:8px 6px;text-align:center;color:var(--sg);font-size:.68rem;font-weight:700;border-right:1px solid rgba(255,255,255,.07);">'+sn+'</th>').join("")
@@ -948,21 +945,14 @@ function renderInvCompare(){
           const e1=pd1[nm]?.br[sn]?.e;
           const e2=pd2[nm]?.br[sn]?.e;
           if(dualMode){
-            const b1e1=pd1[nm]?.br[sn]?.b1e;const b2e1=pd1[nm]?.br[sn]?.b2e;
-            const b1e2=pd2[nm]?.br[sn]?.b1e;const b2e2=pd2[nm]?.br[sn]?.b2e;
-            const exp1=b1e1&&b2e1&&b1e1!==b2e1?fd2(b1e1)+"/"+fd2(b2e1):(b1e1?fd2(b1e1):b2e1?fd2(b2e1):"");
-            const exp2=b1e2&&b2e2&&b1e2!==b2e2?fd2(b1e2)+"/"+fd2(b2e2):(b1e2?fd2(b1e2):b2e2?fd2(b2e2):"");
-            return '<td style="padding:6px 7px;text-align:center;'+qStyle(v1,catMax)+';border-right:1px solid rgba(4,42,43,.04);">'
-              +(v1?'<div style="font-size:.82rem;font-family:var(--nm);">'+v1+'</div>'+(exp1?'<div style="font-size:.58rem;color:#888;">ص: '+exp1+'</div>':''):'<span style="color:#ddd;font-size:.8rem;">—</span>')+'</td>'
-              +'<td style="padding:6px 7px;text-align:center;'+qStyle(v2,catMax)+';border-right:1px solid rgba(4,42,43,.07);">'
-              +(v2?'<div style="font-size:.82rem;font-family:var(--nm);">'+v2+'</div>'+(exp2?'<div style="font-size:.58rem;color:#888;">ص: '+exp2+'</div>':''):'<span style="color:#ddd;font-size:.8rem;">—</span>')+'</td>';
+            return '<td style="padding:7px;text-align:center;'+qStyle(v1,catMax)+';border-right:1px solid rgba(4,42,43,.04);">'
+              +(v1?'<span style="font-size:.9rem;font-family:var(--nm);font-weight:800;">'+v1+'</span>':'<span style="color:#ddd;">—</span>')+'</td>'
+              +'<td style="padding:7px;text-align:center;'+qStyle(v2,catMax)+';border-right:1px solid rgba(4,42,43,.07);">'
+              +(v2?'<span style="font-size:.9rem;font-family:var(--nm);font-weight:800;">'+v2+'</span>':'<span style="color:#ddd;">—</span>')+'</td>';
           } else {
             const v=d1?v1:v2;
-            const brd=d1?pd1[nm]?.br[sn]:pd2[nm]?.br[sn];
-            const be1=brd?.b1e;const be2=brd?.b2e;
-            const expS=be1&&be2&&be1!==be2?fd2(be1)+"/"+fd2(be2):(be1?fd2(be1):be2?fd2(be2):"");
-            return '<td style="padding:6px 8px;text-align:center;'+qStyle(v,catMax)+';border-right:1px solid rgba(4,42,43,.06);">'
-              +(v?'<div style="font-size:.82rem;font-family:var(--nm);">'+v+'</div>'+(expS?'<div style="font-size:.58rem;color:#888;">ص: '+expS+'</div>':''):'<span style="color:#ddd;">—</span>')+'</td>';
+            return '<td style="padding:7px;text-align:center;'+qStyle(v,catMax)+';border-right:1px solid rgba(4,42,43,.06);">'
+              +(v?'<span style="font-size:.9rem;font-family:var(--nm);font-weight:800;">'+v+'</span>':'<span style="color:#ddd;">—</span>')+'</td>';
           }
         }).join("")
         // Row totals
