@@ -641,7 +641,11 @@ function sv(v,btn){
   if(fns[v])fns[v]();
   window.scrollTo(0,0);
 }
-function rAll(){sv(document.querySelector(".view.active")?.id?.replace("view-","")?.split("-")[0]||"dash",null);updBadges();toast("🔄 تم التحديث");}
+function rAll(){
+  const v=document.querySelector(".view.active")?.id?.replace("view-","")?.split("-")[0]||"dash";
+  if(v)sv(v,null);
+  updBadges();
+}
 function setReg(r,btn){curReg=r;document.querySelectorAll(".rtab").forEach(b=>b.classList.remove("active"));btn.classList.add("active");renderSales();}
 function eTab(t,btn){expTab=t;document.querySelectorAll("#view-expiry .ptab").forEach(b=>b.classList.remove("active"));btn.classList.add("active");renderExp();}
 function gTab(r,btn){gRegion=r;document.querySelectorAll("#view-goals .ptab").forEach(b=>b.classList.remove("active"));btn.classList.add("active");renderGoalInputs();}

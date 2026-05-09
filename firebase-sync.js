@@ -1,20 +1,18 @@
 // ═══════════════════════════════════════════════════════════════════
-//  فريش آب — Firebase Real-Time Sync  v1.0
-//  أضف هذا الملف قبل السكريبت الرئيسي في كل صفحة
+//  فريش آب — Firebase Real-Time Sync  v2.0
+//  يضمن تزامن البيانات بين الكاشير والمشرف والمدير
 // ═══════════════════════════════════════════════════════════════════
 
 // ── 1. FIREBASE CONFIG ──────────────────────────────────────────────
-//  ❗ استبدل هذه القيم بإعدادات مشروعك في Firebase Console
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyBD0qRg-7-Ixn6PXJZiHhhmWqjEtW-eIiM",
-  authDomain: "freshup-2026.firebaseapp.com",
-  databaseURL: "https://freshup-2026-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "freshup-2026",
-  storageBucket: "freshup-2026.firebasestorage.app",
-  messagingSenderId: "987696801684",
-  appId: "1:987696801684:web:c1544fa7baaddcaf341181",
-  measurementId: "G-7XN0SCESD4"
+//  ❗ استبدل هذه القيم بإعدادات مشروعك من Firebase Console
+var FIREBASE_CONFIG = {
+  apiKey:            "YOUR_API_KEY",
+  authDomain:        "YOUR_PROJECT_ID.firebaseapp.com",
+  databaseURL:       "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
+  projectId:         "YOUR_PROJECT_ID",
+  storageBucket:     "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId:             "YOUR_APP_ID"
 };
 
 // ── 2. المفاتيح المشتركة بين الأنظمة الثلاثة ──────────────────────
@@ -31,10 +29,10 @@ var SYNC_KEYS = [
   "fu_col_notes",  // ملاحظات التحصيل
   "fu_import_log"  // سجل الاستيراد
 ];
- 
+
 // مفاتيح تبقى محلية فقط (لا تُرفع لـ Firebase)
 var LOCAL_ONLY = ["fu_lang", "fu_credentials", "fu_user"];
- 
+
 // ── 3. المتغيرات الداخلية ──────────────────────────────────────────
 var FU_DB        = null;
 var FU_READY     = false;
@@ -42,11 +40,11 @@ var FU_CACHE     = {};
 var _writeTimers = {};
 var _renderTimer = null;
 var _badgeTimer  = null;
- 
+
 // ── FIX A: تطبيق patch على localStorage فوراً (قبل أي كود آخر) ────
 // هذا يضمن أن كل قراءة تأتي من FU_CACHE إذا كان البيانات موجودة فيه
 window._realLS = window.localStorage;
- 
+
 var _pLS = {
   getItem: function(key) {
     // أولاً: ابحث في FU_CACHE (بيانات Firebase)
@@ -59,19 +57,19 @@ var _pLS = {
   setItem: function(key, value) {
     // احفظ محلياً دائماً كـ fallback
     try { window._realLS.setItem(key, value); } catch(e) {}
- 
+
     // تجاهل المفاتيح المحلية
     if (LOCAL_ONLY.indexOf(key) >= 0) return;
- 
+
     // هل هو مفتاح مزامنة؟
     var sync = SYNC_KEYS.some(function(k) {
       return key === k || key.startsWith(k);
     });
     if (!sync) return;
- 
+
     // حدّث FU_CACHE فوراً (optimistic update)
     FU_CACHE[key] = value;
- 
+
     // أرسل لـ Firebase بعد 400ms (debounce)
     if (!FU_DB) return;
     clearTimeout(_writeTimers[key]);
@@ -92,7 +90,7 @@ var _pLS = {
   key:   function(n) { return window._realLS.key(n); },
   clear: function()  { /* لا نمسح Firebase */ window._realLS.clear(); }
 };
- 
+
 // تطبيق الـ patch على window.localStorage
 try {
   Object.defineProperty(window, "localStorage", {
@@ -102,7 +100,7 @@ try {
 } catch(e) {
   console.warn("FU-Sync: Could not override localStorage:", e);
 }
- 
+
 // ── 4. تحميل Firebase SDKs ─────────────────────────────────────────
 function _loadFirebase(cb) {
   var loaded = 0;
@@ -118,7 +116,7 @@ function _loadFirebase(cb) {
     document.head.appendChild(s);
   });
 }
- 
+
 // ── 5. تهيئة Firebase ─────────────────────────────────────────────
 function _initFirebase() {
   try {
@@ -128,13 +126,13 @@ function _initFirebase() {
     FU_DB = firebase.database();
     _syncStatus("جاري التحميل...", "#d4721f");
     console.log("FU-Sync: Firebase initialized");
- 
+
     // ── FIX B: اقرأ كل البيانات مرة واحدة ثم استمع للتغييرات ──────
     FU_DB.ref("freshup").once("value")
       .then(function(snap) {
         var data = snap.val() || {};
         var count = 0;
- 
+
         // أدخل كل البيانات في FU_CACHE وفي localStorage الحقيقي
         Object.keys(data).forEach(function(k) {
           if (data[k] !== null && data[k] !== undefined) {
@@ -143,15 +141,15 @@ function _initFirebase() {
             count++;
           }
         });
- 
+
         FU_READY = true;
         _syncStatus("متصل ✅", "#1e9e5e");
         console.log("FU-Sync: Loaded " + count + " keys from Firebase");
- 
+
         // ── FIX C: أعد تهيئة الصفحة بعد تحميل البيانات ─────────────
         // هذا يضمن أن الصفحة تُعرض ببيانات Firebase وليس localStorage الفارغ
         _triggerRerender();
- 
+
         // استمع للتغييرات الجديدة (Real-time)
         FU_DB.ref("freshup").on("child_changed", function(snap) {
           var k  = snap.key;
@@ -164,7 +162,7 @@ function _initFirebase() {
           clearTimeout(_renderTimer);
           _renderTimer = setTimeout(_triggerRerender, 300);
         });
- 
+
         FU_DB.ref("freshup").on("child_added", function(snap) {
           if (!FU_READY) return; // تجاهل الأحداث الأولية
           var k   = snap.key;
@@ -182,13 +180,13 @@ function _initFirebase() {
         _syncErr("خطأ في القراءة");
         console.error("FU-Sync read error:", e);
       });
- 
+
   } catch(e) {
     _syncErr("خطأ في الإعداد");
     console.error("FU-Sync init error:", e);
   }
 }
- 
+
 // ── إعادة رسم الصفحة الحالية ──────────────────────────────────────
 function _triggerRerender() {
   if (typeof rAll === "function") {
@@ -200,7 +198,7 @@ function _triggerRerender() {
     setTimeout(updBadges, 150);
   }
 }
- 
+
 // ── 6. مؤشر الحالة (أسفل يمين الشاشة) ────────────────────────────
 function _injectBadge() {
   if (document.getElementById("fu-badge")) return;
@@ -218,7 +216,7 @@ function _injectBadge() {
   ].join(";");
   document.body.appendChild(d);
 }
- 
+
 function _syncStatus(msg, color) {
   var dot = document.getElementById("fu-dot");
   var txt = document.getElementById("fu-txt");
@@ -228,13 +226,13 @@ function _syncStatus(msg, color) {
   txt.textContent = msg;
   if (bdg) bdg.style.opacity = "1";
 }
- 
+
 function _syncErr(msg) {
   _syncStatus("❌ " + msg, "#c0392b");
   var bdg = document.getElementById("fu-badge");
   if (bdg) bdg.style.color = "#ff8a80";
 }
- 
+
 function _syncPulse() {
   _syncStatus("✅ تم الحفظ", "#1e9e5e");
   clearTimeout(_badgeTimer);
@@ -243,7 +241,7 @@ function _syncPulse() {
     if (bdg) bdg.style.opacity = "0";
   }, 3000);
 }
- 
+
 // ── 7. API عام للاستخدام من باقي الملفات ─────────────────────────
 window.FU_SYNC = {
   isReady:    function() { return FU_READY; },
@@ -251,7 +249,7 @@ window.FU_SYNC = {
   forceWrite: function(key, value) { _pLS.setItem(key, value); },
   reload:     function() { _triggerRerender(); }
 };
- 
+
 // ── 8. التشغيل ─────────────────────────────────────────────────────
 (function() {
   function _boot() {
@@ -263,11 +261,10 @@ window.FU_SYNC = {
     }
     _loadFirebase(_initFirebase);
   }
- 
+
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", _boot);
   } else {
     _boot();
   }
 })();
- 

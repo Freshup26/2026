@@ -434,7 +434,15 @@ function dn(dt){if(!dt)return"—";return DAYS[new Date(dt).getDay()];}
 function pr(nm){const p=JSON.parse(localStorage.getItem(K.pr)||"{}");return p[nm]||DP[nm]||0;}
 function es(exp){if(!exp)return{l:"—",c:""};const n=new Date();n.setHours(0,0,0,0);const e=new Date(exp);const d=Math.ceil((e-n)/86400000);if(d<0)return{l:"منتهي ("+Math.abs(d)+")",c:"b-rd",d};if(d===0)return{l:"اليوم!",c:"b-rd",d:0};if(d<=3)return{l:d+" أيام",c:"b-or",d};return{l:d+" يوم",c:"b-gn",d};}
 function getBrs(){return reg==="riyadh"?BR_R:BR_Q;}
-function fR(arr){const br=getBrs();return arr.filter(e=>br.includes(e.site));}
+function fR(arr){
+  const br=getBrs();
+  const filtered=arr.filter(e=>br.includes(e.site));
+  // If no matches, try matching by region field as fallback
+  if(!filtered.length && arr.length){
+    return arr.filter(e=>e.region===reg||e.site===reg||br.some(b=>e.site&&e.site.includes(b.split(" - ")[0])));
+  }
+  return filtered;
+}
 function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),4000);}
 function S(id,v){const e=document.getElementById(id);if(e)e.textContent=v;}
 
