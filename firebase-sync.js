@@ -19,10 +19,10 @@ const firebaseConfig = {
 
 // ── 2. المفاتيح المشتركة بين الأنظمة الثلاثة ──────────────────────
 var SYNC_KEYS = [
-  "fu_balance",    // موازنة الفروع
-  "fu_inventory",  // الجرد
-  "fu_entries",    // الاكسبايري
-  "fu_needs",      // الاحتياجات
+  "fu_balance",    // موازنة الفروع   (cashier: KEYS.balance)
+  "fu_inventory",  // الجرد           (cashier: KEYS.inventory)
+  "fu_entries",    // الاكسبايري      (cashier: KEYS.expiry)
+  "fu_needs",      // الاحتياجات      (cashier: KEYS.needs)
   "fu_goals",      // أهداف المبيعات
   "fu_prices",     // الأسعار والتكاليف
   "fu_nc",         // حالة توفير الاحتياجات
@@ -31,18 +31,78 @@ var SYNC_KEYS = [
   "fu_col_notes",  // ملاحظات التحصيل
   "fu_import_log"  // سجل الاستيراد
 ];
-
+ 
 // مفاتيح تبقى محلية فقط (لا تُرفع لـ Firebase)
-var LOCAL_ONLY = ["fu_lang", "fu_credentials"];
-
+var LOCAL_ONLY = ["fu_lang", "fu_credentials", "fu_user"];
+ 
 // ── 3. المتغيرات الداخلية ──────────────────────────────────────────
-var FU_DB     = null;
-var FU_READY  = false;
-var FU_CACHE  = {};
+var FU_DB        = null;
+var FU_READY     = false;
+var FU_CACHE     = {};
 var _writeTimers = {};
 var _renderTimer = null;
 var _badgeTimer  = null;
-
+ 
+// ── FIX A: تطبيق patch على localStorage فوراً (قبل أي كود آخر) ────
+// هذا يضمن أن كل قراءة تأتي من FU_CACHE إذا كان البيانات موجودة فيه
+window._realLS = window.localStorage;
+ 
+var _pLS = {
+  getItem: function(key) {
+    // أولاً: ابحث في FU_CACHE (بيانات Firebase)
+    if (FU_CACHE.hasOwnProperty(key) && FU_CACHE[key] !== null && FU_CACHE[key] !== undefined) {
+      return FU_CACHE[key];
+    }
+    // ثانياً: ارجع للـ localStorage المحلي
+    return window._realLS.getItem(key);
+  },
+  setItem: function(key, value) {
+    // احفظ محلياً دائماً كـ fallback
+    try { window._realLS.setItem(key, value); } catch(e) {}
+ 
+    // تجاهل المفاتيح المحلية
+    if (LOCAL_ONLY.indexOf(key) >= 0) return;
+ 
+    // هل هو مفتاح مزامنة؟
+    var sync = SYNC_KEYS.some(function(k) {
+      return key === k || key.startsWith(k);
+    });
+    if (!sync) return;
+ 
+    // حدّث FU_CACHE فوراً (optimistic update)
+    FU_CACHE[key] = value;
+ 
+    // أرسل لـ Firebase بعد 400ms (debounce)
+    if (!FU_DB) return;
+    clearTimeout(_writeTimers[key]);
+    _writeTimers[key] = setTimeout(function() {
+      FU_DB.ref("freshup/" + key).set(value)
+        .then(function() { _syncPulse(); })
+        .catch(function(e) {
+          _syncErr("خطأ كتابة");
+          console.error("FU-Sync write error [" + key + "]:", e);
+        });
+    }, 400);
+  },
+  removeItem: function(key) {
+    try { window._realLS.removeItem(key); } catch(e) {}
+    delete FU_CACHE[key];
+    if (FU_DB) FU_DB.ref("freshup/" + key).remove();
+  },
+  key:   function(n) { return window._realLS.key(n); },
+  clear: function()  { /* لا نمسح Firebase */ window._realLS.clear(); }
+};
+ 
+// تطبيق الـ patch على window.localStorage
+try {
+  Object.defineProperty(window, "localStorage", {
+    get: function() { return _pLS; },
+    configurable: true
+  });
+} catch(e) {
+  console.warn("FU-Sync: Could not override localStorage:", e);
+}
+ 
 // ── 4. تحميل Firebase SDKs ─────────────────────────────────────────
 function _loadFirebase(cb) {
   var loaded = 0;
@@ -54,152 +114,160 @@ function _loadFirebase(cb) {
     var s = document.createElement("script");
     s.src = src;
     s.onload  = function() { if (++loaded === urls.length) cb(); };
-    s.onerror = function() { _syncErr("فشل تحميل Firebase SDK"); };
+    s.onerror = function() { _syncErr("فشل تحميل Firebase"); };
     document.head.appendChild(s);
   });
 }
-
-// ── 5. تهيئة Firebase والاستماع للتغييرات ─────────────────────────
+ 
+// ── 5. تهيئة Firebase ─────────────────────────────────────────────
 function _initFirebase() {
   try {
-    firebase.initializeApp(FIREBASE_CONFIG);
+    if (!firebase.apps.length) {
+      firebase.initializeApp(FIREBASE_CONFIG);
+    }
     FU_DB = firebase.database();
-    _syncStatus("جاري التحميل...", "#aaa");
-
-    FU_DB.ref("freshup").once("value").then(function(snap) {
-      var data = snap.val() || {};
-      var count = 0;
-      Object.keys(data).forEach(function(k) {
-        if (data[k] !== null) { FU_CACHE[k] = data[k]; count++; }
-      });
-      FU_READY = true;
-      _syncStatus("متصل", "#1e9e5e");
-      console.log("FU-Sync: loaded " + count + " keys");
-
-      // Real-time listener for all changes
-      FU_DB.ref("freshup").on("value", function(snap) {
-        var fresh = snap.val() || {};
-        var changed = false;
-        Object.keys(fresh).forEach(function(k) {
-          if (fresh[k] !== FU_CACHE[k]) { FU_CACHE[k] = fresh[k]; changed = true; }
+    _syncStatus("جاري التحميل...", "#d4721f");
+    console.log("FU-Sync: Firebase initialized");
+ 
+    // ── FIX B: اقرأ كل البيانات مرة واحدة ثم استمع للتغييرات ──────
+    FU_DB.ref("freshup").once("value")
+      .then(function(snap) {
+        var data = snap.val() || {};
+        var count = 0;
+ 
+        // أدخل كل البيانات في FU_CACHE وفي localStorage الحقيقي
+        Object.keys(data).forEach(function(k) {
+          if (data[k] !== null && data[k] !== undefined) {
+            FU_CACHE[k] = data[k];
+            try { window._realLS.setItem(k, data[k]); } catch(e) {}
+            count++;
+          }
         });
-        if (changed && FU_READY) {
+ 
+        FU_READY = true;
+        _syncStatus("متصل ✅", "#1e9e5e");
+        console.log("FU-Sync: Loaded " + count + " keys from Firebase");
+ 
+        // ── FIX C: أعد تهيئة الصفحة بعد تحميل البيانات ─────────────
+        // هذا يضمن أن الصفحة تُعرض ببيانات Firebase وليس localStorage الفارغ
+        _triggerRerender();
+ 
+        // استمع للتغييرات الجديدة (Real-time)
+        FU_DB.ref("freshup").on("child_changed", function(snap) {
+          var k  = snap.key;
+          var val = snap.val();
+          if (val !== null) {
+            FU_CACHE[k] = val;
+            try { window._realLS.setItem(k, val); } catch(e) {}
+          }
+          // أعد الرسم بعد 300ms
           clearTimeout(_renderTimer);
-          _renderTimer = setTimeout(function() {
-            if (typeof rAll       === "function") rAll();
-            if (typeof updBadges  === "function") updBadges();
-          }, 300);
-        }
+          _renderTimer = setTimeout(_triggerRerender, 300);
+        });
+ 
+        FU_DB.ref("freshup").on("child_added", function(snap) {
+          if (!FU_READY) return; // تجاهل الأحداث الأولية
+          var k   = snap.key;
+          var val = snap.val();
+          if (val !== null && FU_CACHE[k] !== val) {
+            FU_CACHE[k] = val;
+            try { window._realLS.setItem(k, val); } catch(e) {}
+            clearTimeout(_renderTimer);
+            _renderTimer = setTimeout(_triggerRerender, 300);
+          }
+        });
+      })
+      .catch(function(e) {
+        FU_READY = true; // استمر بالعمل محلياً
+        _syncErr("خطأ في القراءة");
+        console.error("FU-Sync read error:", e);
       });
-
-      // Trigger first render
-      if (typeof rAll === "function") setTimeout(rAll, 150);
-
-    }).catch(function(e) {
-      FU_READY = true;
-      _syncErr("خطأ في القراءة");
-      console.error("FU-Sync read error:", e);
-    });
+ 
   } catch(e) {
-    _syncErr("خطأ في الإعداد — تحقق من FIREBASE_CONFIG");
+    _syncErr("خطأ في الإعداد");
     console.error("FU-Sync init error:", e);
   }
 }
-
-// ── 6. تعديل localStorage ──────────────────────────────────────────
-// حفظ المرجع الأصلي
-window._realLS = window.localStorage;
-
-var _pLS = {
-  getItem: function(key) {
-    if (FU_CACHE.hasOwnProperty(key)) return FU_CACHE[key];
-    return window._realLS.getItem(key);
-  },
-  setItem: function(key, value) {
-    // دائماً احفظ محلياً كـ fallback
-    try { window._realLS.setItem(key, value); } catch(e) {}
-
-    // تجاهل المفاتيح المحلية
-    if (LOCAL_ONLY.indexOf(key) >= 0) return;
-
-    // هل هو مفتاح مزامنة؟
-    var sync = SYNC_KEYS.some(function(k) { return key === k || key.startsWith(k); });
-    if (!sync || !FU_DB) return;
-
-    FU_CACHE[key] = value;
-
-    // كتابة مؤجلة لـ Firebase (debounce 400ms)
-    clearTimeout(_writeTimers[key]);
-    _writeTimers[key] = setTimeout(function() {
-      FU_DB.ref("freshup/" + key).set(value)
-        .then(function() { _syncPulse(); })
-        .catch(function(e) { _syncErr("خطأ كتابة: " + key); console.error(e); });
-    }, 400);
-  },
-  removeItem: function(key) {
-    try { window._realLS.removeItem(key); } catch(e) {}
-    delete FU_CACHE[key];
-    if (FU_DB) FU_DB.ref("freshup/" + key).remove();
-  },
-  key:   function(n) { return window._realLS.key(n); },
-  clear: function()  { window._realLS.clear(); }
-};
-
-// تطبيق الـ patch
-try {
-  Object.defineProperty(window, "localStorage", {
-    get: function() { return _pLS; },
-    configurable: true
-  });
-} catch(e) {
-  console.warn("FU-Sync: Could not override localStorage", e);
+ 
+// ── إعادة رسم الصفحة الحالية ──────────────────────────────────────
+function _triggerRerender() {
+  if (typeof rAll === "function") {
+    rAll();
+  } else if (typeof renderDash === "function") {
+    renderDash();
+  }
+  if (typeof updBadges === "function") {
+    setTimeout(updBadges, 150);
+  }
 }
-
-// ── 7. مؤشر الحالة ────────────────────────────────────────────────
+ 
+// ── 6. مؤشر الحالة (أسفل يمين الشاشة) ────────────────────────────
 function _injectBadge() {
+  if (document.getElementById("fu-badge")) return;
   var d = document.createElement("div");
   d.id = "fu-badge";
-  d.style.cssText = "position:fixed;bottom:14px;right:14px;background:rgba(4,42,43,.88);color:#c7d78f;font-size:.68rem;font-family:'Outfit',sans-serif;font-weight:700;padding:5px 12px;border-radius:20px;z-index:9999;display:flex;align-items:center;gap:6px;box-shadow:0 2px 10px rgba(0,0,0,.25);transition:all .4s;opacity:0;pointer-events:none;";
-  d.innerHTML = '<span id="fu-dot" style="width:7px;height:7px;border-radius:50%;background:#aaa;flex-shrink:0;"></span><span id="fu-txt">...</span>';
+  d.innerHTML = '<span id="fu-dot" style="width:8px;height:8px;border-radius:50%;background:#d4721f;flex-shrink:0;display:inline-block;"></span> <span id="fu-txt">Firebase...</span>';
+  d.style.cssText = [
+    "position:fixed", "bottom:14px", "right:14px",
+    "background:rgba(4,42,43,.9)", "color:#c7d78f",
+    "font-size:.68rem", "font-family:'Outfit',sans-serif", "font-weight:700",
+    "padding:5px 13px", "border-radius:20px", "z-index:99999",
+    "display:flex", "align-items:center", "gap:6px",
+    "box-shadow:0 2px 12px rgba(0,0,0,.3)",
+    "transition:opacity .5s", "pointer-events:none"
+  ].join(";");
   document.body.appendChild(d);
 }
+ 
 function _syncStatus(msg, color) {
   var dot = document.getElementById("fu-dot");
   var txt = document.getElementById("fu-txt");
   var bdg = document.getElementById("fu-badge");
   if (!dot) return;
-  dot.style.background = color;
+  dot.style.background = color || "#aaa";
   txt.textContent = msg;
-  if (bdg) { bdg.style.opacity = "1"; bdg.style.color = "#c7d78f"; }
+  if (bdg) bdg.style.opacity = "1";
 }
+ 
 function _syncErr(msg) {
+  _syncStatus("❌ " + msg, "#c0392b");
   var bdg = document.getElementById("fu-badge");
   if (bdg) bdg.style.color = "#ff8a80";
-  _syncStatus("❌ " + msg, "#c0392b");
 }
+ 
 function _syncPulse() {
-  _syncStatus("✅ محفوظ", "#1e9e5e");
-  var bdg = document.getElementById("fu-badge");
-  if (bdg) {
-    bdg.style.opacity = "1";
-    clearTimeout(_badgeTimer);
-    _badgeTimer = setTimeout(function() { bdg.style.opacity = "0"; }, 2500);
-  }
+  _syncStatus("✅ تم الحفظ", "#1e9e5e");
+  clearTimeout(_badgeTimer);
+  _badgeTimer = setTimeout(function() {
+    var bdg = document.getElementById("fu-badge");
+    if (bdg) bdg.style.opacity = "0";
+  }, 3000);
 }
-
+ 
+// ── 7. API عام للاستخدام من باقي الملفات ─────────────────────────
+window.FU_SYNC = {
+  isReady:    function() { return FU_READY; },
+  getCache:   function() { return FU_CACHE; },
+  forceWrite: function(key, value) { _pLS.setItem(key, value); },
+  reload:     function() { _triggerRerender(); }
+};
+ 
 // ── 8. التشغيل ─────────────────────────────────────────────────────
-function _boot() {
-  _injectBadge();
-  if (FIREBASE_CONFIG.apiKey === "YOUR_API_KEY") {
-    _syncErr("أضف FIREBASE_CONFIG في firebase-sync.js");
-    console.warn("FU-Sync: Config not set. Edit FIREBASE_CONFIG in firebase-sync.js");
-    return;
+(function() {
+  function _boot() {
+    _injectBadge();
+    if (FIREBASE_CONFIG.apiKey === "YOUR_API_KEY") {
+      _syncErr("أضف FIREBASE_CONFIG في firebase-sync.js");
+      console.warn("FU-Sync: FIREBASE_CONFIG not configured.");
+      return;
+    }
+    _loadFirebase(_initFirebase);
   }
-  _loadFirebase(_initFirebase);
-}
-
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", _boot);
-} else {
-  _boot();
-}
+ 
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", _boot);
+  } else {
+    _boot();
+  }
+})();
+ 
