@@ -624,6 +624,9 @@ window.FU_SYNC={
 </div>
 <div id="toast"></div>
 <script>
+// Safe T() fallback (non-bilingual version)
+function T(k){var m={"toast_saved":"تم الحفظ","toast_refresh":"تم التحديث","confirm_logout":"تأكيد الخروج؟","no_data":"لا توجد بيانات","no_sales":"لا توجد مبيعات","hist_expiry":"اكسبايري","hist_inventory":"جرد","hist_needs":"احتياجات","hist_balance":"موازنة","status_morning":"صباحي","status_evening":"مسائي","cat_sandwich":"ساندويش","cat_juices":"عصائر","cat_salads":"سلطات","from_goal":"من","cur":"ريال","product_lbl":"منتج"};return m[k]||k;}
+
 const CREDS={"801":{name:"شعيب",region:"riyadh",pass:"3333"},"802":{name:"محمد",region:"qassim",pass:"4444"}};
 const PRODS={
   sandwich:[{ar:"بوريتو دجاج",en:"Chicken Burrito"},{ar:"فيينا دجاج مشوي",en:"Chicken Grilled Vienna"},{ar:"كلوب دجاج رانش",en:"Club Ranch Chicken"},{ar:"باجيت دجاج رانش",en:"Potato Baguette Ranch"},{ar:"اونيون دجاج سبايسي",en:"Onion Spicy Chicken"},{ar:"باجيت دجاج فاهيتا",en:"Baguette Chicken Fajita"},{ar:"باجيت دجاج تندوري",en:"Vienna Baguette Tandoori"},{ar:"شيباتا دجاج باربكيو",en:"Ciabatta Chicken BBQ"},{ar:"فوكاتشا جبن حلومي كبير",en:"Large Halloumi Focaccia"},{ar:"فوكاتشا جبن حلومي صغير",en:"Small Halloumi Focaccia"},{ar:"بيجلز جبن تيركي",en:"Sesame Bagel Turkey"},{ar:"باجيت اربع اجبان",en:"Baguette Four Cheese"},{ar:"بيجلز جبن حلومي",en:"Halloumi Bagel"},{ar:"شيباتا تونة وذرة",en:"Tuna Corn Ciabatta"}],
@@ -796,7 +799,7 @@ function renderNeeds(){
   }
 }
 function saveNdChk(){
-  toast("✅ "+T("toast_saved"));
+  toast("✅ تم الحفظ");
 }
 
 function nTab(t,btn){nTab2=t;document.querySelectorAll("#view-needs .ptab").forEach(b=>b.classList.remove("active"));btn.classList.add("active");renderNeeds();}

@@ -783,6 +783,9 @@ window.FU_SYNC={
 <div id="toast"></div>
 <script>
 // ═══ CONSTANTS ══════════════════════════════════════════════════════════════
+// Safe T() fallback (non-bilingual version)
+function T(k){var m={"toast_saved":"تم الحفظ","toast_refresh":"تم التحديث","confirm_logout":"تأكيد الخروج؟","no_data":"لا توجد بيانات","no_sales":"لا توجد مبيعات","hist_expiry":"اكسبايري","hist_inventory":"جرد","hist_needs":"احتياجات","hist_balance":"موازنة","status_morning":"صباحي","status_evening":"مسائي","cat_sandwich":"ساندويش","cat_juices":"عصائر","cat_salads":"سلطات","from_goal":"من","cur":"ريال","product_lbl":"منتج"};return m[k]||k;}
+
 const MGR_CREDS={"001":{name:"المدير العام",pass:"1234"}};
 const PRODS={
   sandwich:[{ar:"بوريتو دجاج",en:"Chicken Burrito"},{ar:"فيينا دجاج مشوي",en:"Grilled Vienna"},{ar:"كلوب دجاج رانش",en:"Club Ranch"},{ar:"باجيت دجاج رانش",en:"Baguette Ranch"},{ar:"اونيون دجاج سبايسي",en:"Onion Spicy"},{ar:"باجيت دجاج فاهيتا",en:"Baguette Fajita"},{ar:"باجيت دجاج تندوري",en:"Baguette Tandoori"},{ar:"شيباتا دجاج باربكيو",en:"Ciabatta BBQ"},{ar:"فوكاتشا جبن حلومي كبير",en:"Large Halloumi"},{ar:"فوكاتشا جبن حلومي صغير",en:"Small Halloumi"},{ar:"بيجلز جبن تيركي",en:"Turkey Bagel"},{ar:"باجيت اربع اجبان",en:"Four Cheese"},{ar:"بيجلز جبن حلومي",en:"Halloumi Bagel"},{ar:"شيباتا تونة وذرة",en:"Tuna Corn"}],
