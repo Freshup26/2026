@@ -159,7 +159,67 @@ input[type="date"].pc-inp{font-family:var(--nm)!important;direction:ltr!importan
 .empty-msg{text-align:center;padding:28px;color:#bbb;font-size:.82rem;}
 @media(max-width:820px){.sb{width:48px;}.sb-top .sb-logo,.sb-sec,.sni span:not(.ni),.sb-user{display:none;}.sni{justify-content:center;padding:9px;}.main{margin-right:48px;}.krow,.k3{grid-template-columns:1fr 1fr;}.two-col{grid-template-columns:1fr;}.fix-bar{left:48px;}}
 </style>
-<script src="firebase-sync.js"></script>
+<script>
+// ═══ Firebase Real-Time Sync — فريش آب v2.0 ═══════════════════════
+var FIREBASE_CONFIG={
+  apiKey:"AIzaSyBD0qRg-7-Ixn6PXJZiHhhmWqjEtW-eIiM",
+  authDomain:"freshup-2026.firebaseapp.com",
+  databaseURL:"https://freshup-2026-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:"freshup-2026",
+  storageBucket:"freshup-2026.firebasestorage.app",
+  messagingSenderId:"987696801684",
+  appId:"1:987696801684:web:c1544fa7baaddcaf341181"
+};
+var SYNC_KEYS=["fu_balance","fu_inventory","fu_entries","fu_needs","fu_goals","fu_prices","fu_nc","fu_employees","fu_recon","fu_col_notes","fu_import_log"];
+var LOCAL_ONLY=["fu_lang","fu_credentials","fu_user"];
+var FU_DB=null,FU_READY=false,FU_CACHE={},_wT={},_rT=null,_bT=null;
+window._realLS=window.localStorage;
+var _pLS={
+  getItem:function(k){return FU_CACHE.hasOwnProperty(k)&&FU_CACHE[k]!==null?FU_CACHE[k]:window._realLS.getItem(k);},
+  setItem:function(k,v){
+    try{window._realLS.setItem(k,v);}catch(e){}
+    if(LOCAL_ONLY.indexOf(k)>=0)return;
+    var sync=SYNC_KEYS.some(function(s){return k===s||k.startsWith(s);});
+    if(!sync)return;
+    FU_CACHE[k]=v;
+    if(!FU_DB)return;
+    clearTimeout(_wT[k]);
+    _wT[k]=setTimeout(function(){
+      FU_DB.ref("freshup/"+k).set(v).then(function(){_pulse();}).catch(function(e){_err("خطأ كتابة");});
+    },400);
+  },
+  removeItem:function(k){try{window._realLS.removeItem(k);}catch(e){}delete FU_CACHE[k];if(FU_DB)FU_DB.ref("freshup/"+k).remove();},
+  key:function(n){return window._realLS.key(n);},clear:function(){window._realLS.clear();}
+};
+try{Object.defineProperty(window,"localStorage",{get:function(){return _pLS;},configurable:true});}catch(e){}
+function _load(cb){
+  var n=0,urls=["https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js","https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"];
+  urls.forEach(function(src){var s=document.createElement("script");s.src=src;s.onload=function(){if(++n===2)cb();};s.onerror=function(){_err("فشل تحميل Firebase");};document.head.appendChild(s);});
+}
+function _init(){
+  try{
+    if(!firebase.apps.length)firebase.initializeApp(FIREBASE_CONFIG);
+    FU_DB=firebase.database();
+    _status("جاري التحميل...","#d4721f");
+    FU_DB.ref("freshup").once("value").then(function(snap){
+      var d=snap.val()||{};
+      Object.keys(d).forEach(function(k){if(d[k]!==null){FU_CACHE[k]=d[k];try{window._realLS.setItem(k,d[k]);}catch(e){}}}); 
+      FU_READY=true;
+      _status("متصل ✅","#1e9e5e");
+      FU_DB.ref("freshup").on("child_changed",function(s){var k=s.key,v=s.val();if(v!==null){FU_CACHE[k]=v;try{window._realLS.setItem(k,v);}catch(e){}}clearTimeout(_rT);_rT=setTimeout(_render,300);});
+      FU_DB.ref("freshup").on("child_added",function(s){if(!FU_READY)return;var k=s.key,v=s.val();if(v!==null&&FU_CACHE[k]!==v){FU_CACHE[k]=v;try{window._realLS.setItem(k,v);}catch(e){}}clearTimeout(_rT);_rT=setTimeout(_render,300);});
+      setTimeout(_render,150);
+    }).catch(function(e){FU_READY=true;_err("خطأ قراءة");});
+  }catch(e){_err("خطأ إعداد");}
+}
+function _render(){if(typeof rAll==="function")rAll();if(typeof updBadges==="function")setTimeout(updBadges,150);}
+function _badge(){if(document.getElementById("fu-b"))return;var d=document.createElement("div");d.id="fu-b";d.innerHTML='<span id="fu-dot" style="width:7px;height:7px;border-radius:50%;background:#d4721f;display:inline-block;"></span> <span id="fu-txt">Firebase...</span>';d.style.cssText="position:fixed;bottom:14px;right:14px;background:rgba(4,42,43,.9);color:#c7d78f;font-size:.68rem;font-family:Outfit,sans-serif;font-weight:700;padding:5px 13px;border-radius:20px;z-index:99999;display:flex;align-items:center;gap:6px;box-shadow:0 2px 12px rgba(0,0,0,.3);pointer-events:none;transition:opacity .5s";document.body.appendChild(d);}
+function _status(m,c){var d=document.getElementById("fu-dot"),t=document.getElementById("fu-txt"),b=document.getElementById("fu-b");if(d)d.style.background=c;if(t)t.textContent=m;if(b)b.style.opacity="1";}
+function _err(m){_status("❌ "+m,"#c0392b");var b=document.getElementById("fu-b");if(b)b.style.color="#ff8a80";}
+function _pulse(){_status("✅ تم الحفظ","#1e9e5e");clearTimeout(_bT);_bT=setTimeout(function(){var b=document.getElementById("fu-b");if(b)b.style.opacity="0";},3000);}
+window.FU_SYNC={isReady:function(){return FU_READY;},getCache:function(){return FU_CACHE;}};
+(function(){function boot(){_badge();_load(_init);}if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",boot);}else{boot();}})();
+</script>
 </head>
 <body>
 <div id="lov">
