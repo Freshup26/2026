@@ -703,7 +703,7 @@ function doLogin(){
   document.getElementById("drv-date").value=td();
   document.getElementById("einv-date").value=td();
   document.getElementById("ends-date").value=td();
-  document.getElementById("inv-d2").value=td();
+  
   buildEndsList();
   dCat("sandwich");iCat("sandwich");
   updBadges();renderDash();popHist();
@@ -1074,12 +1074,7 @@ function setInvTab(tab,btn){
   if(btn)btn.classList.add("active");
   document.getElementById("inv-ops-section").style.display=tab==="ops"?"":"none";
   document.getElementById("inv-compare-section").style.display=tab==="compare"?"":"none";
-  if(tab==="compare"){selCmpOps=new Set();buildOpsChecklist();
-    if(!document.getElementById("inv-cmp-date").value){
-      document.getElementById("inv-cmp-date").value=new Date().toISOString().split("T")[0];
-    }
-    renderInvCompare();
-  } else {
+  if(tab==="compare"){selCmpOps=new Set();buildOpsChecklist();renderInvCompare();} else {
     selInvId=null;renderInv();
   }
 }

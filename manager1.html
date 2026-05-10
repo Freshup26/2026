@@ -860,7 +860,7 @@ function doLogin(){
   if(!u||u.pass!==pass){err.textContent="الرقم أو كلمة المرور غير صحيحة";err.style.display="block";return;}
   document.getElementById("lov").style.display="none";
   S("sb-nm",u.name);S("tb-wk",wkL());S("cmp-lbl",wkL(wkOff));
-  document.getElementById("inv-d2").value=td();
+  
   document.getElementById("rp-from").value=ws();
   document.getElementById("rp-to").value=td();
   populateHist();populateGoals();renderPrices();renderEmployees();populateBrFilter();
@@ -1296,12 +1296,7 @@ function setInvTab(tab,btn){
   if(btn)btn.classList.add("active");
   document.getElementById("inv-ops-section").style.display=tab==="ops"?"":"none";
   document.getElementById("inv-compare-section").style.display=tab==="compare"?"":"none";
-  if(tab==="compare"){selCmpOps=new Set();buildOpsChecklist();
-    if(!document.getElementById("inv-cmp-date").value){
-      document.getElementById("inv-cmp-date").value=new Date().toISOString().split("T")[0];
-    }
-    renderInvCompare();
-  } else {
+  if(tab==="compare"){selCmpOps=new Set();buildOpsChecklist();renderInvCompare();} else {
     selInvId=null;renderInv();
   }
 }
