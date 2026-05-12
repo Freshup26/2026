@@ -4,28 +4,53 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>فريش آب — تشخيص</title>
-<script src="firebase-sync.js"></script>
+<script>
+// Firebase مدمج مباشرة
+var FIREBASE_CONFIG={
+  apiKey:"AIzaSyBD0qRg-7-Ixn6PXJZiHhhmWqjEtW-eIiM",
+  authDomain:"freshup-2026.firebaseapp.com",
+  databaseURL:"https://freshup-2026-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:"freshup-2026",
+  storageBucket:"freshup-2026.firebasestorage.app",
+  messagingSenderId:"987696801684",
+  appId:"1:987696801684:web:c1544fa7baaddcaf341181"
+};
+var SYNC_KEYS=["fu_balance","fu_inventory","fu_entries","fu_needs","fu_goals","fu_prices","fu_nc","fu_employees","fu_recon","fu_col_notes","fu_import_log"];
+var FU_DB=null,FU_READY=false,FU_CACHE={};
+function loadFB(cb){
+  var n=0,urls=["https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js","https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"];
+  urls.forEach(function(src){var s=document.createElement("script");s.src=src;s.onload=function(){if(++n===2)cb();};document.head.appendChild(s);});
+}
+function initFB(){
+  if(!firebase.apps.length)firebase.initializeApp(FIREBASE_CONFIG);
+  FU_DB=firebase.database();
+  FU_DB.ref("freshup").once("value").then(function(snap){
+    FU_CACHE=snap.val()||{};FU_READY=true;
+    setTimeout(runChecks,100);
+  }).catch(function(e){FU_READY=true;setTimeout(runChecks,100);});
+}
+window.addEventListener("load",function(){loadFB(initFB);});
+</script>
 <style>
-body{font-family:'Courier New',monospace;background:#042a2b;color:#c7d78f;padding:20px;font-size:.82rem;}
-h2{color:#fff;margin:20px 0 10px;}
-.box{background:rgba(255,255,255,.07);border-radius:8px;padding:14px;margin-bottom:12px;white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto;}
-.key{color:#e7dc83;font-weight:700;}
-.ok{color:#1e9e5e;}.err{color:#c0392b;}.warn{color:#d4721f;}
-button{background:#025253;color:#fff;border:none;border-radius:7px;padding:8px 16px;cursor:pointer;margin:4px;font-size:.82rem;}
+body{font-family:'Courier New',monospace;background:#042a2b;color:#c7d78f;padding:16px;font-size:.82rem;margin:0;}
+h2{color:#fff;margin:18px 0 9px;font-family:sans-serif;font-size:1rem;}
+.box{background:rgba(255,255,255,.07);border-radius:8px;padding:13px;margin-bottom:11px;white-space:pre-wrap;word-break:break-all;max-height:320px;overflow-y:auto;line-height:1.7;}
+.ok{color:#1e9e5e;}.err{color:#c0392b;}.warn{color:#d4721f;}.key{color:#e7dc83;font-weight:700;}
+button{background:#025253;color:#fff;border:none;border-radius:7px;padding:8px 14px;cursor:pointer;margin:3px;font-size:.8rem;}
+button.danger{background:#8b1a1a;}
+button.primary{background:#1e6e3a;}
 </style>
 </head>
 <body>
-<h2>🔍 تشخيص Firebase + بيانات فريش آب</h2>
-
-<div>
-  <button onclick="checkFirebase()">🔄 فحص Firebase</button>
-  <button onclick="checkLocalStorage()">💾 فحص localStorage</button>
-  <button onclick="clearAll()">🗑️ مسح كل البيانات</button>
-  <button onclick="addTestData()">➕ إضافة بيانات تجريبية</button>
+<h2>🔍 تشخيص فريش آب + Firebase</h2>
+<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:14px;">
+  <button class="primary" onclick="runChecks()">🔄 فحص</button>
+  <button onclick="forceSync()">☁️ رفع البيانات المحلية لـ Firebase</button>
+  <button class="danger" onclick="clearAll()">🗑️ مسح كل البيانات</button>
 </div>
 
 <h2>حالة الاتصال</h2>
-<div class="box" id="status">جاري الفحص...</div>
+<div class="box" id="status">جاري الاتصال...</div>
 
 <h2>بيانات FU_CACHE (Firebase)</h2>
 <div class="box" id="cache-box">—</div>
@@ -37,157 +62,136 @@ button{background:#025253;color:#fff;border:none;border-radius:7px;padding:8px 1
 <div class="box" id="analysis">—</div>
 
 <script>
-var KEYS_MAP = {
-  fu_balance:   "موازنة الفروع",
-  fu_inventory: "الجرد",
-  fu_entries:   "الاكسبايري",
-  fu_needs:     "الاحتياجات",
-  fu_goals:     "أهداف المبيعات",
-  fu_prices:    "الأسعار",
-  fu_nc:        "توفير الاحتياجات",
-  fu_employees: "الموظفون",
+var KEYS_LABELS={
+  fu_balance:"موازنة الفروع",fu_inventory:"الجرد",fu_entries:"الاكسبايري",
+  fu_needs:"الاحتياجات",fu_goals:"أهداف المبيعات",fu_prices:"الأسعار",
+  fu_nc:"توفير الاحتياجات",fu_employees:"الموظفون"
 };
+var BR_Q=["فرع التربية - القصيم","فرع عنيزة - القصيم","فرع الرس - القصيم","فرع اتمال - القصيم","ماكينة 121","ماكينة 153","ماكينة 143","ماكينة 129","ماكينة 149","ماكينة 145"];
+var BR_R=["فرع الزكاة - الرياض","CCC 127","CCC 146","CCC 150","MUN 124","MUN 126","MUN 140","Red Sea 272","Red Sea 123","SLC 144","SLC 128","EJADA 130","TNFZ 141","ELM 142"];
 
-function S(id, html) { document.getElementById(id).innerHTML = html; }
+function S(id,html){document.getElementById(id).innerHTML=html;}
 
-function checkFirebase() {
-  var out = "";
-  // Firebase sync status
-  if (typeof FU_SYNC === "undefined") {
-    out += '<span class="err">❌ firebase-sync.js لم يُحمَّل! تأكد من وجود الملف في نفس المجلد.</span>\n';
-    S("status", out); return;
-  }
-  out += '<span class="ok">✅ firebase-sync.js محمّل</span>\n';
-  out += 'FU_READY: <span class="' + (FU_SYNC.isReady() ? "ok" : "warn") + '">' + FU_SYNC.isReady() + '</span>\n';
-
-  var cache = FU_SYNC.getCache();
-  var cacheKeys = Object.keys(cache);
-  out += 'مفاتيح FU_CACHE: <span class="key">' + cacheKeys.length + '</span> مفتاح\n';
-  cacheKeys.forEach(function(k) {
-    var val = cache[k];
-    var label = KEYS_MAP[k] || k;
-    var parsed = null;
-    try { parsed = JSON.parse(val); } catch(e) {}
-    var count = Array.isArray(parsed) ? parsed.length + " سجل" : (typeof parsed === "object" ? "object" : "string");
-    out += '  <span class="key">' + k + '</span> (' + label + '): <span class="ok">' + count + '</span>\n';
-  });
-  S("status", out);
-  checkCacheDetail();
+function runChecks(){
+  checkStatus();
+  checkCache();
+  checkLS();
+  analyze();
 }
 
-function checkCacheDetail() {
-  if (typeof FU_SYNC === "undefined") { S("cache-box", "firebase-sync.js غير محمّل"); return; }
-  var cache = FU_SYNC.getCache();
-  var out = "";
-  Object.keys(KEYS_MAP).forEach(function(k) {
-    var val = cache[k];
-    if (!val) { out += '<span class="warn">⚠️ ' + k + ' (' + KEYS_MAP[k] + '): فارغ</span>\n\n'; return; }
-    var parsed = null;
-    try { parsed = JSON.parse(val); } catch(e) { out += '<span class="err">❌ ' + k + ': خطأ في التحليل: ' + e + '</span>\n\n'; return; }
-    if (Array.isArray(parsed)) {
-      out += '<span class="ok">✅ ' + k + ' (' + KEYS_MAP[k] + '): ' + parsed.length + ' سجل</span>\n';
-      if (parsed.length > 0) {
-        var first = parsed[0];
-        out += '  أول سجل: site="<span class="key">' + (first.site||"—") + '</span>" | region="' + (first.region||"—") + '" | date="' + (first.addedDate||"—") + '"\n';
-        if (first.items) out += '  عدد العناصر: ' + first.items.length + '\n';
-      }
-      out += '\n';
-    } else {
-      out += '<span class="ok">✅ ' + k + ': object</span>\n\n';
-    }
-  });
-  S("cache-box", out || "لا توجد بيانات في FU_CACHE");
-}
-
-function checkLocalStorage() {
-  var realLS = window._realLS || window.localStorage;
-  var out = "";
-  var KEYS = ["fu_balance","fu_inventory","fu_entries","fu_needs","fu_goals","fu_prices","fu_nc","fu_employees"];
-  KEYS.forEach(function(k) {
-    var val = realLS.getItem(k);
-    if (!val) { out += '<span class="warn">⚠️ ' + k + ': فارغ في localStorage الحقيقي</span>\n\n'; return; }
-    try {
-      var parsed = JSON.parse(val);
-      if (Array.isArray(parsed)) {
-        out += '<span class="ok">✅ ' + k + ': ' + parsed.length + ' سجل في localStorage</span>\n';
-        if (parsed[0]) out += '  site="' + (parsed[0].site||"—") + '" date="' + (parsed[0].addedDate||"—") + '"\n';
-      } else {
-        out += '<span class="ok">✅ ' + k + ': object</span>\n';
-      }
-    } catch(e) {
-      out += '<span class="err">❌ ' + k + ': ' + e + '</span>\n';
-    }
-    out += '\n';
-  });
-  S("ls-box", out || "localStorage الحقيقي فارغ تماماً");
-}
-
-function analyze() {
-  var out = "";
-  var cache = (typeof FU_SYNC !== "undefined") ? FU_SYNC.getCache() : {};
-
-  // Check: does fu_entries exist?
-  var expiry = null, inv = null, needs = null, bal = null;
-  try { expiry = JSON.parse(cache["fu_entries"]||"null"); } catch(e) {}
-  try { inv    = JSON.parse(cache["fu_inventory"]||"null"); } catch(e) {}
-  try { needs  = JSON.parse(cache["fu_needs"]||"null"); } catch(e) {}
-  try { bal    = JSON.parse(cache["fu_balance"]||"null"); } catch(e) {}
-
-  var BR_Q = ["فرع التربية - القصيم","فرع عنيزة - القصيم","فرع الرس - القصيم","فرع اتمال - القصيم","ماكينة 121","ماكينة 153","ماكينة 143","ماكينة 129","ماكينة 149","ماكينة 145"];
-  var BR_R = ["فرع الزكاة - الرياض","CCC 127","CCC 146","CCC 150","MUN 124","MUN 126","MUN 140","Red Sea 272","Red Sea 123","SLC 144","SLC 128","EJADA 130","TNFZ 141","ELM 142"];
-
-  [["fu_entries (اكسبايري)", expiry], ["fu_inventory (جرد)", inv], ["fu_needs (احتياجات)", needs], ["fu_balance (موازنة)", bal]].forEach(function(pair) {
-    var name = pair[0], data = pair[1];
-    if (!data || !data.length) { out += '<span class="warn">⚠️ ' + name + ': لا بيانات في Firebase</span>\n'; return; }
-    out += '<span class="ok">✅ ' + name + ': ' + data.length + ' سجل</span>\n';
-    data.forEach(function(r) {
-      var inR = BR_R.includes(r.site);
-      var inQ = BR_Q.includes(r.site);
-      var regionStatus = inR ? '<span class="ok">في الرياض</span>' : inQ ? '<span class="ok">في القصيم</span>' : '<span class="err">⚠️ SITE غير معروف!</span>';
-      out += '   site="<span class="key">' + (r.site||"—") + '</span>" → ' + regionStatus + '\n';
+function checkStatus(){
+  var out="";
+  out+='<span class="ok">✅ Firebase مدمج مباشرة</span>\n';
+  out+='FU_READY: <span class="'+(FU_READY?"ok":"warn")+'">'+FU_READY+'</span>\n';
+  var n=Object.keys(FU_CACHE).length;
+  out+='مفاتيح FU_CACHE: <span class="key">'+n+'</span> مفتاح\n';
+  if(n>0){
+    Object.keys(FU_CACHE).forEach(function(k){
+      var val=FU_CACHE[k],parsed=null;
+      try{parsed=JSON.parse(val);}catch(e){}
+      var count=Array.isArray(parsed)?parsed.length+" سجل":(typeof parsed==="object"&&parsed?"object":"string");
+      out+='  <span class="key">'+k+'</span> ('+( KEYS_LABELS[k]||k)+'): <span class="ok">'+count+'</span>\n';
     });
-    out += '\n';
-  });
-
-  if (out.includes("SITE غير معروف")) {
-    out += '\n<span class="err">🔴 المشكلة: قيمة "site" في البيانات لا تطابق أسماء الفروع في النظام.</span>\n';
-    out += '<span class="warn">الحل: تأكد أن بيانات الكاشير تُحفظ بنفس اسم الفرع الموجود في supervisor.html</span>\n';
   }
-  S("analysis", out || "لا بيانات للتحليل");
+  S("status",out);
 }
 
-// Run checks on page load
-window.addEventListener("load", function() {
-  setTimeout(function() {
-    checkFirebase();
-    checkLocalStorage();
-    analyze();
-  }, 2000); // انتظر 2 ثانية لتحميل Firebase
-});
-
-function clearAll() {
-  if (!confirm("مسح كل البيانات نهائياً؟")) return;
-  ["fu_balance","fu_inventory","fu_entries","fu_needs","fu_goals","fu_prices","fu_nc"].forEach(function(k) {
-    localStorage.removeItem(k);
+function checkCache(){
+  var out="";
+  SYNC_KEYS.forEach(function(k){
+    var val=FU_CACHE[k];
+    if(!val){out+='<span class="warn">⚠️ '+k+' ('+KEYS_LABELS[k]+'): فارغ في Firebase</span>\n\n';return;}
+    var parsed=null;
+    try{parsed=JSON.parse(val);}catch(e){out+='<span class="err">❌ '+k+': خطأ في التحليل</span>\n\n';return;}
+    if(Array.isArray(parsed)){
+      out+='<span class="ok">✅ '+k+' ('+KEYS_LABELS[k]+'): '+parsed.length+' سجل</span>\n';
+      if(parsed.length>0){
+        var f=parsed[0];
+        out+='  أول سجل: site="<span class="key">'+(f.site||"—")+'</span>" date="'+(f.addedDate||"—")+'"\n';
+      }
+      out+='\n';
+    } else {
+      out+='<span class="ok">✅ '+k+': object</span>\n\n';
+    }
   });
-  alert("تم المسح. أعد تحميل الصفحة.");
+  S("cache-box",out||"لا توجد بيانات في Firebase");
 }
 
-function addTestData() {
-  // Add sample data to test the sync
-  var testExp = JSON.stringify([{
-    id: Date.now(),
-    items: [{cat:"sandwich", nameAr:"بوريتو دجاج", nameEn:"Chicken Burrito", qty:2, exp:new Date().toISOString().split("T")[0]}],
-    site: "فرع الزكاة - الرياض",
-    region: "riyadh",
-    cashier: "301",
-    cashierName: "بسام",
-    addedDate: new Date().toISOString().split("T")[0],
-    weekKey: ""
-  }]);
-  localStorage.setItem("fu_entries", testExp);
-  alert("✅ تم إضافة بيانات تجريبية للاكسبايري (فرع الزكاة - الرياض). افتح واجهة المشرف 801 أو المدير وتحقق.");
-  setTimeout(function() { checkFirebase(); analyze(); }, 1000);
+function checkLS(){
+  var out="";
+  SYNC_KEYS.forEach(function(k){
+    var val=localStorage.getItem(k);
+    if(!val){out+='<span class="warn">⚠️ '+k+': فارغ في localStorage</span>\n\n';return;}
+    try{
+      var parsed=JSON.parse(val);
+      if(Array.isArray(parsed)){
+        out+='<span class="ok">✅ '+k+': '+parsed.length+' سجل في localStorage</span>\n';
+        if(parsed[0])out+='  site="'+(parsed[0].site||"—")+'" date="'+(parsed[0].addedDate||"—")+'"\n';
+      } else {
+        out+='<span class="ok">✅ '+k+': object</span>\n';
+      }
+    }catch(e){out+='<span class="err">❌ '+k+': '+e+'</span>\n';}
+    out+='\n';
+  });
+  S("ls-box",out||"localStorage فارغ");
+}
+
+function analyze(){
+  var out="";
+  var lsHasData=false,fbHasData=false;
+  SYNC_KEYS.slice(0,4).forEach(function(k){
+    var ls=localStorage.getItem(k);
+    var fb=FU_CACHE[k];
+    if(ls)lsHasData=true;
+    if(fb)fbHasData=true;
+  });
+  if(lsHasData && !fbHasData){
+    out+='<span class="err">🔴 البيانات موجودة في الجهاز لكن لم تصل Firebase بعد!</span>\n';
+    out+='<span class="warn">← اضغط زر "☁️ رفع البيانات المحلية لـ Firebase" أعلاه</span>\n\n';
+  } else if(!lsHasData && !fbHasData){
+    out+='<span class="warn">⚠️ لا بيانات في الجهاز ولا Firebase — أدخل بيانات من الكاشير أولاً</span>\n';
+  } else if(fbHasData){
+    out+='<span class="ok">✅ البيانات موجودة في Firebase — المشرف والمدير يرونها</span>\n';
+    // Check region
+    SYNC_KEYS.slice(0,4).forEach(function(k){
+      var fb=FU_CACHE[k];
+      if(!fb)return;
+      var parsed=null;try{parsed=JSON.parse(fb);}catch(e){return;}
+      if(!Array.isArray(parsed)||!parsed.length)return;
+      parsed.forEach(function(r){
+        var inR=BR_R.includes(r.site);
+        var inQ=BR_Q.includes(r.site);
+        var reg=inR?"🏙️ الرياض":inQ?"🌴 القصيم":'<span class="err">⚠️ منطقة غير معروفة!</span>';
+        out+='  '+k+': site="<span class="key">'+(r.site||"—")+'</span>" → '+reg+'\n';
+      });
+    });
+  }
+  S("analysis",out||"—");
+}
+
+function forceSync(){
+  if(!FU_DB){alert("Firebase لم يتصل بعد — انتظر ثانية وحاول مجدداً");return;}
+  var synced=0;
+  SYNC_KEYS.forEach(function(k){
+    var val=localStorage.getItem(k);
+    if(!val)return;
+    FU_DB.ref("freshup/"+k).set(val).then(function(){synced++;});
+  });
+  setTimeout(function(){
+    alert("✅ تم رفع "+synced+" مفتاح لـ Firebase");
+    loadFB(function(){
+      if(!firebase.apps.length)firebase.initializeApp(FIREBASE_CONFIG);
+      FU_DB.ref("freshup").once("value").then(function(snap){FU_CACHE=snap.val()||{};runChecks();});
+    });
+  },1500);
+}
+
+function clearAll(){
+  if(!confirm("مسح كل البيانات نهائياً؟"))return;
+  SYNC_KEYS.forEach(function(k){localStorage.removeItem(k);});
+  if(FU_DB)FU_DB.ref("freshup").remove();
+  setTimeout(runChecks,500);
+  alert("✅ تم المسح");
 }
 </script>
 </body>
